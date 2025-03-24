@@ -1,0 +1,33 @@
+{
+  "name": "nomada-backend",
+  "version": "1.0.0",
+  "description": "API Backend para la aplicación de viajeros Nómada",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest",
+    "seed": "node scripts/seed-db.js",
+    "create-tables": "node scripts/create-tables.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^8.3.0",
+    "@fastify/jwt": "^7.2.1",
+    "@fastify/swagger": "^8.9.0",
+    "@fastify/swagger-ui": "^1.9.3",
+    "@supabase/supabase-js": "^2.31.0",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.21.0",
+    "fastify-plugin": "^4.5.1",
+    "pg": "^8.14.1"
+  },
+  "devDependencies": {
+    "jest": "^29.6.2",
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
