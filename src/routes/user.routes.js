@@ -1,15 +1,11 @@
 /**
- * Rutas de usuarios
- * 
- * Maneja autenticación, registro, perfil y preferencias de usuario
+ * Rutas de usuarios: autenticación, registro, perfil y preferencias
  */
 const UserService = require('../services/user.service');
+const { supabase } = require('../db/supabase');
 
-/**
- * Esquemas para validación y documentación
- */
+// Esquemas para validación y documentación
 const schemas = {
-  // Esquema para registro de usuario
   register: {
     description: 'Registrar un nuevo usuario',
     tags: ['usuarios'],
@@ -43,7 +39,6 @@ const schemas = {
     }
   },
   
-  // Esquema para inicio de sesión
   login: {
     description: 'Iniciar sesión de usuario',
     tags: ['usuarios'],
@@ -74,7 +69,6 @@ const schemas = {
     }
   },
   
-  // Esquema para obtener perfil
   getProfile: {
     description: 'Obtener perfil del usuario',
     tags: ['usuarios'],
@@ -108,7 +102,6 @@ const schemas = {
     }
   },
   
-  // Esquema para actualizar preferencias
   updatePreferences: {
     description: 'Actualizar preferencias de viaje del usuario',
     tags: ['usuarios'],
@@ -137,7 +130,6 @@ const schemas = {
     }
   },
   
-  // Esquema para añadir país visitado
   addVisitedCountry: {
     description: 'Añadir país visitado al perfil del usuario',
     tags: ['usuarios'],
@@ -169,8 +161,16 @@ const schemas = {
  * @param {Object} options - Opciones de configuración
  */
 async function userRoutes(fastify, options) {
+  // Usar el cliente Supabase importado como respaldo si el decorador no está disponible
+  const supabaseClient = fastify.supabase || supabase;
+  
+  if (!supabaseClient) {
+    fastify.log.error('Error: Cliente de Supabase no disponible');
+    throw new Error('Cliente de Supabase no disponible en rutas de usuario');
+  }
+  
   // Instancia del servicio de usuarios
-  const userService = new UserService(fastify.supabase);
+  const userService = new UserService(supabaseClient);
   
   // Registro de usuario
   fastify.post('/register', { schema: schemas.register }, async (request, reply) => {

@@ -1,7 +1,5 @@
 /**
- * Servicio de usuarios
- * 
- * Maneja la lógica de negocio para la gestión de usuarios, autenticación y perfiles
+ * Servicio para gestión de usuarios, autenticación y perfiles
  */
 class UserService {
   /**
@@ -9,7 +7,12 @@ class UserService {
    * @param {Object} supabase - Cliente de Supabase
    */
   constructor(supabase) {
+    if (!supabase) {
+      console.error('Error: Cliente de Supabase no inicializado');
+      throw new Error('Cliente de Supabase no disponible');
+    }
     this.supabase = supabase;
+    console.log('UserService inicializado con cliente Supabase');
   }
 
   /**
@@ -68,7 +71,7 @@ class UserService {
       .single();
 
     if (profileError) {
-      // Si hay error al crear perfil, intentar eliminar el usuario de auth
+      // Si hay error al crear perfil, eliminar el usuario de auth para mantener consistencia
       await this.supabase.auth.admin.deleteUser(authData.user.id);
       throw new Error(`Error al crear perfil: ${profileError.message}`);
     }
@@ -87,7 +90,6 @@ class UserService {
    * @returns {Promise<Object>} - Datos del usuario autenticado
    */
   async loginUser(email, password) {
-    // Autenticar con Supabase Auth
     const { data: authData, error: authError } = await this.supabase.auth.signInWithPassword({
       email,
       password,
@@ -97,7 +99,6 @@ class UserService {
       throw new Error('Credenciales incorrectas');
     }
 
-    // Obtener datos del perfil
     const { data: userData, error: profileError } = await this.supabase
       .from('users')
       .select('id, username, email')
@@ -133,7 +134,6 @@ class UserService {
       throw new Error('Usuario no encontrado');
     }
 
-    // Formatear para la respuesta
     return {
       id: data.id,
       username: data.username,
@@ -169,7 +169,6 @@ class UserService {
       ...preferences
     };
 
-    // Actualizar en la base de datos
     const { error: updateError } = await this.supabase
       .from('users')
       .update({ preferences: updatedPreferences })

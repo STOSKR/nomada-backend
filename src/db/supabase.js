@@ -4,12 +4,9 @@ const { createClient } = require('@supabase/supabase-js');
 const fp = require('fastify-plugin');
 
 /**
- * Conexión a Supabase
- * 
- * Este módulo configura y exporta el cliente de Supabase para usar en toda la aplicación
+ * Conexión a Supabase para usar en toda la aplicación
  */
 
-// Verificar las variables de entorno necesarias
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
@@ -17,7 +14,6 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   throw new Error('Faltan variables de entorno para Supabase: SUPABASE_URL y SUPABASE_KEY son obligatorias');
 }
 
-// Crear el cliente de Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: false
@@ -30,7 +26,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
  * @param {Object} options - Opciones del plugin
  */
 async function supabasePlugin(fastify, options) {
-  // Verificar la conexión
   try {
     // Intentamos una consulta simple que no dependa de tablas específicas
     const { data, error } = await supabase.rpc('get_service_role');
@@ -53,10 +48,8 @@ async function supabasePlugin(fastify, options) {
     }
   }
 
-  // Decorar Fastify con el cliente de Supabase
   fastify.decorate('supabase', supabase);
   
-  // Decorar la petición con el cliente de Supabase para acceso en las rutas
   fastify.decorateRequest('supabase', {
     getter() {
       return supabase;

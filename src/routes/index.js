@@ -1,10 +1,7 @@
 /**
- * Registro de rutas de la API
- * 
- * Este archivo centraliza todas las rutas de la API y las registra con Fastify
+ * Registro centralizado de todas las rutas de la API
  */
 
-// Importar los módulos de rutas
 const userRoutes = require('./user.routes');
 const routeRoutes = require('./route.routes');
 const recommendationRoutes = require('./recommendation.routes');

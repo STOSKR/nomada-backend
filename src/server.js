@@ -9,7 +9,10 @@ const fastify = require('fastify')({
 });
 
 // Importar plugins y componentes propios
-const { supabasePlugin } = require('./db/supabase');
+const { supabasePlugin, supabase } = require('./db/supabase');
+
+// Verificar que el cliente de Supabase está disponible
+console.log('Estado del cliente Supabase:', supabase ? 'Inicializado' : 'No inicializado');
 
 // Configuración básica
 const PORT = process.env.PORT || 3000;
@@ -40,7 +43,7 @@ async function registerPlugins() {
     }
   });
 
-  // Decorador para verificar autenticación
+  // Decorador para verificar autenticación en rutas protegidas
   fastify.decorate('authenticate', async (request, reply) => {
     try {
       await request.jwtVerify();
@@ -83,25 +86,7 @@ async function registerPlugins() {
 
 // Registro de rutas
 async function registerRoutes() {
-  // Ruta de prueba
-  fastify.get('/', {
-    schema: {
-      description: 'Ruta de prueba',
-      tags: ['test'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            hello: { type: 'string' }
-          }
-        }
-      }
-    }
-  }, async () => {
-    return { hello: 'world' };
-  });
-
-  // Verificación de salud del servidor
+  
   fastify.get('/health', {
     schema: {
       description: 'Verificación de salud del servidor',
@@ -123,8 +108,7 @@ async function registerRoutes() {
     };
   });
 
-  // Cargar módulos de rutas
-  await fastify.register(require('./routes'), { prefix: '/api' });
+  await fastify.register(require('./routes'));
 }
 
 // Manejador global de errores
@@ -170,10 +154,12 @@ process.on('unhandledRejection', (reason, promise) => {
 // Iniciar servidor
 async function start() {
   try {
-    // Registrar plugins
+    // Asegurarnos de que primero se registran los plugins
+    console.log('Registrando plugins...');
     await registerPlugins();
     
-    // Registrar rutas
+    // Después registrar las rutas
+    console.log('Registrando rutas...');
     await registerRoutes();
     
     // Iniciar servidor
