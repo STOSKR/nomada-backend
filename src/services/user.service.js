@@ -117,12 +117,13 @@ class UserService {
   /**
    * Obtener perfil completo del usuario
    * @param {string} userId - ID del usuario
+   * @param {string} currentUserId - ID del usuario que hace la solicitud (opcional)
    * @returns {Promise<Object>} - Perfil del usuario
    */
-  async getUserProfile(userId) {
+  async getUserProfile(userId, currentUserId = null) {
     const { data, error } = await this.supabase
       .from('users')
-      .select('id, username, email, full_name, bio, preferences, visited_countries')
+      .select('id, username, email, full_name, bio, preferences, visited_countries, followers_count, following_count')
       .eq('id', userId)
       .single();
 
@@ -134,6 +135,21 @@ class UserService {
       throw new Error('Usuario no encontrado');
     }
 
+    // Verificar si el usuario actual sigue a este perfil
+    let isFollowing = null;
+    if (currentUserId && currentUserId !== userId) {
+      const { data: followData, error: followError } = await this.supabase
+        .from('user_follows')
+        .select('id')
+        .eq('follower_id', currentUserId)
+        .eq('following_id', userId)
+        .maybeSingle();
+
+      if (!followError) {
+        isFollowing = !!followData;
+      }
+    }
+
     return {
       id: data.id,
       username: data.username,
@@ -141,7 +157,10 @@ class UserService {
       fullName: data.full_name,
       bio: data.bio,
       preferences: data.preferences || {},
-      visitedCountries: data.visited_countries || []
+      visitedCountries: data.visited_countries || [],
+      followersCount: data.followers_count || 0,
+      followingCount: data.following_count || 0,
+      isFollowing
     };
   }
 

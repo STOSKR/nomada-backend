@@ -1,4 +1,5 @@
 const UserService = require('../services/user.service');
+const FollowService = require('../services/follow.service');
 const { supabase } = require('../db/supabase');
 
 // Esquemas para validación y documentación
@@ -149,6 +150,118 @@ const schemas = {
         }
       }
     }
+  },
+
+  followUser: {
+    description: 'Seguir a un usuario',
+    tags: ['usuarios', 'seguimiento'],
+    security: [{ apiKey: [] }],
+    params: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' }
+      },
+      required: ['id']
+    },
+    response: {
+      201: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          message: { type: 'string' }
+        }
+      }
+    }
+  },
+
+  unfollowUser: {
+    description: 'Dejar de seguir a un usuario',
+    tags: ['usuarios', 'seguimiento'],
+    security: [{ apiKey: [] }],
+    params: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' }
+      },
+      required: ['id']
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          message: { type: 'string' }
+        }
+      }
+    }
+  },
+
+  getFollowers: {
+    description: 'Obtener seguidores de un usuario',
+    tags: ['usuarios', 'seguimiento'],
+    security: [{ apiKey: [] }],
+    params: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' }
+      },
+      required: ['id']
+    },
+    querystring: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', default: 20 },
+        offset: { type: 'integer', default: 0 }
+      }
+    },
+    response: {
+      200: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string' },
+            full_name: { type: 'string' },
+            bio: { type: 'string' }
+          }
+        }
+      }
+    }
+  },
+
+  getFollowing: {
+    description: 'Obtener usuarios seguidos por un usuario',
+    tags: ['usuarios', 'seguimiento'],
+    security: [{ apiKey: [] }],
+    params: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' }
+      },
+      required: ['id']
+    },
+    querystring: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', default: 20 },
+        offset: { type: 'integer', default: 0 }
+      }
+    },
+    response: {
+      200: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string' },
+            full_name: { type: 'string' },
+            bio: { type: 'string' }
+          }
+        }
+      }
+    }
   }
 };
 
@@ -168,6 +281,9 @@ async function userRoutes(fastify, options) {
 
   // Instancia del servicio de usuarios
   const userService = new UserService(supabaseClient);
+
+  // Instancia del servicio de seguimiento
+  const followService = new FollowService(supabaseClient);
 
   // Registro de usuario
   fastify.post('/register', { schema: schemas.register }, async (request, reply) => {
@@ -230,6 +346,32 @@ async function userRoutes(fastify, options) {
     }
   });
 
+  // Obtener perfil de usuario por ID
+  fastify.get('/:id', {
+    preValidation: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      const requestedId = request.params.id;
+      const currentUserId = request.user.id;
+
+      // Si el ID es "me", devuelve el perfil del usuario actual
+      const userId = (requestedId === "me") ? currentUserId : requestedId;
+
+      const result = await userService.getUserProfile(userId, currentUserId);
+
+      return {
+        success: true,
+        user: result
+      };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(404).send({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
   // Actualizar preferencias (autenticado)
   fastify.put('/preferences', {
     schema: schemas.updatePreferences,
@@ -269,6 +411,96 @@ async function userRoutes(fastify, options) {
     } catch (error) {
       request.log.error(error);
       return reply.code(400).send({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
+  // Seguir a un usuario
+  fastify.post('/:id/follow', {
+    schema: schemas.followUser,
+    preValidation: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      const currentUserId = request.user.id;
+      const targetUserId = request.params.id;
+
+      const result = await followService.followUser(currentUserId, targetUserId);
+
+      return reply.code(201).send({
+        success: true,
+        message: result.message
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(400).send({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
+  // Dejar de seguir a un usuario
+  fastify.delete('/:id/follow', {
+    schema: schemas.unfollowUser,
+    preValidation: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      const currentUserId = request.user.id;
+      const targetUserId = request.params.id;
+
+      const result = await followService.unfollowUser(currentUserId, targetUserId);
+
+      return {
+        success: true,
+        message: result.message
+      };
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(400).send({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
+  // Obtener seguidores de un usuario
+  fastify.get('/:id/followers', {
+    schema: schemas.getFollowers,
+    preValidation: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      const userId = request.params.id === "me" ? request.user.id : request.params.id;
+      const { limit = 20, offset = 0 } = request.query;
+
+      const followers = await followService.getFollowers(userId, limit, offset);
+
+      return followers;
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
+  // Obtener usuarios seguidos por un usuario
+  fastify.get('/:id/following', {
+    schema: schemas.getFollowing,
+    preValidation: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      const userId = request.params.id === "me" ? request.user.id : request.params.id;
+      const { limit = 20, offset = 0 } = request.query;
+
+      const following = await followService.getFollowing(userId, limit, offset);
+
+      return following;
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
         success: false,
         message: error.message
       });

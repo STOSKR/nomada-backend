@@ -1,11 +1,9 @@
 /**
- * Servicio de rutas de viaje
- * 
- * Maneja la lógica de negocio para la gestión de rutas, destinos y optimización
+ * Servicio para la gestión de rutas de viaje
  */
 class RouteService {
   /**
-   * Constructor del servicio
+   * Constructor
    * @param {Object} supabase - Cliente de Supabase
    */
   constructor(supabase) {
@@ -13,400 +11,370 @@ class RouteService {
   }
 
   /**
-   * Listar rutas de viaje de un usuario
-   * @param {string} userId - ID del usuario
-   * @param {Object} options - Opciones de filtrado y paginación
-   * @returns {Promise<Object>} - Lista de rutas y conteo total
+   * Obtiene rutas con filtros
+   * @param {Object} filters - Filtros a aplicar
+   * @returns {Promise<Array>} - Lista de rutas
    */
-  async listRoutes(userId, options = {}) {
-    const { limit = 10, offset = 0, status } = options;
-    
-    // Construir query
+  async getRoutes(filters = {}) {
+    const {
+      limit = 20,
+      offset = 0,
+      userId,
+      featured,
+      country,
+      tag
+    } = filters;
+
     let query = this.supabase
       .from('routes')
-      .select('id, name, description, start_date, end_date, status, destinations, created_at', { count: 'exact' })
-      .eq('user_id', userId)
+      .select(`
+        id,
+        title,
+        description,
+        country,
+        is_public,
+        likes_count,
+        created_at,
+        user:user_id (
+          id, 
+          username,
+          full_name
+        )
+      `)
+      .eq('is_public', true)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
-    
-    // Aplicar filtro por estado si se especifica
-    if (status) {
-      query = query.eq('status', status);
+
+    // Filtrado por usuario
+    if (userId) {
+      query = query.eq('user_id', userId);
     }
-    
-    // Ejecutar consulta
-    const { data, error, count } = await query;
-    
+
+    // Filtrado por país
+    if (country) {
+      query = query.eq('country', country);
+    }
+
+    // Filtrado por destacadas (más likes)
+    if (featured) {
+      query = query.order('likes_count', { ascending: false });
+    }
+
+    // Filtrado por etiqueta
+    if (tag) {
+      // Buscar rutas que contengan la etiqueta en su array de tags
+      query = query.contains('tags', [tag]);
+    }
+
+    const { data: routes, error } = await query;
+
     if (error) {
-      throw new Error(`Error al listar rutas: ${error.message}`);
+      console.error('Error al obtener rutas:', error);
+      throw new Error('Error al obtener las rutas');
     }
-    
-    // Transformar datos para la respuesta
-    const routes = data.map(route => ({
-      id: route.id,
-      name: route.name,
-      description: route.description,
-      startDate: route.start_date,
-      endDate: route.end_date,
-      status: route.status,
-      destinations: route.destinations.map(d => d.placeName || d.placeId),
-      createdAt: route.created_at
-    }));
-    
-    return {
-      routes,
-      count
-    };
+
+    return routes || [];
   }
 
   /**
-   * Obtener detalles de una ruta específica
+   * Obtiene los detalles de una ruta específica
    * @param {string} routeId - ID de la ruta
-   * @param {string} userId - ID del usuario (para verificar permisos)
-   * @returns {Promise<Object>} - Detalles completos de la ruta
+   * @param {string} userId - ID del usuario que solicita la información
+   * @returns {Promise<Object>} - Detalles de la ruta
    */
-  async getRouteById(routeId, userId) {
-    // Obtener ruta con información básica
+  async getRouteDetail(routeId, userId) {
+    // Obtener la información básica de la ruta
     const { data: route, error } = await this.supabase
       .from('routes')
-      .select('*')
+      .select(`
+        id,
+        title,
+        description,
+        country,
+        is_public,
+        user_id,
+        likes_count,
+        created_at,
+        user:user_id (
+          id, 
+          username,
+          full_name
+        )
+      `)
       .eq('id', routeId)
       .single();
-    
-    if (error) {
-      throw new Error(`Error al obtener ruta: ${error.message}`);
-    }
-    
-    if (!route) {
+
+    if (error || !route) {
+      console.error('Error al obtener la ruta:', error);
       throw new Error('Ruta no encontrada');
     }
-    
-    // Verificar permiso
-    if (route.user_id !== userId) {
+
+    // Verificar permisos: si la ruta es privada, solo el propietario puede verla
+    if (!route.is_public && route.user_id !== userId) {
       throw new Error('No tienes permiso para ver esta ruta');
     }
-    
-    // Obtener información detallada de destinos
-    const destinations = await this._getDetailedDestinations(route.destinations);
-    
-    // Calcular distancia total
-    const totalDistance = this._calculateTotalDistance(destinations);
-    
-    // Formatear para la respuesta
+
+    // Obtener los lugares asociados a la ruta
+    const { data: places, error: placesError } = await this.supabase
+      .from('places')
+      .select(`
+        id,
+        name,
+        description,
+        coordinates,
+        order_index,
+        photos (
+          id,
+          public_url,
+          caption,
+          order_index
+        )
+      `)
+      .eq('route_id', routeId)
+      .order('order_index', { ascending: true });
+
+    if (placesError) {
+      console.error('Error al obtener los lugares de la ruta:', placesError);
+      throw new Error('Error al obtener los lugares de la ruta');
+    }
+
+    // Verificar si el usuario actual ha dado like a la ruta
+    const { data: userLike, error: likeError } = await this.supabase
+      .from('route_likes')
+      .select('id')
+      .eq('route_id', routeId)
+      .eq('user_id', userId)
+      .single();
+
+    if (likeError && likeError.code !== 'PGRST116') { // PGRST116 es 'no se encontró ningún resultado'
+      console.error('Error al verificar like:', likeError);
+    }
+
+    // Agregar los lugares y el estado del like a la respuesta
     return {
-      id: route.id,
-      name: route.name,
-      description: route.description,
-      startDate: route.start_date,
-      endDate: route.end_date,
-      status: route.status,
-      destinations,
-      createdAt: route.created_at,
-      updatedAt: route.updated_at,
-      totalDistance,
-      budget: route.budget || {
-        transportation: 0,
-        accommodation: 0,
-        activities: 0,
-        food: 0,
-        other: 0,
-        total: 0
-      }
+      ...route,
+      places: places || [],
+      isLiked: !!userLike
     };
   }
 
   /**
-   * Crear una nueva ruta de viaje
-   * @param {string} userId - ID del usuario
-   * @param {Object} routeData - Datos de la ruta a crear
+   * Crea una nueva ruta de viaje
+   * @param {Object} routeData - Datos de la ruta
+   * @param {string} userId - ID del usuario creador
    * @returns {Promise<Object>} - Ruta creada
    */
-  async createRoute(userId, routeData) {
-    const { name, description, startDate, endDate, status, destinations } = routeData;
-    
-    // Verificar que destinations sea un array válido
-    if (!Array.isArray(destinations) || destinations.length === 0) {
-      throw new Error('La ruta debe tener al menos un destino');
-    }
-    
-    // Verificar que los place IDs existan en la BD
-    await this._validatePlaceIds(destinations.map(d => d.placeId));
-    
-    // Enriquecer datos de destinos con nombres
-    const enrichedDestinations = await this._enrichDestinationsWithNames(destinations);
-    
-    // Crear la ruta
-    const { data, error } = await this.supabase
+  async createRoute(routeData, userId) {
+    // Extraer los lugares para insertarlos por separado
+    const { places = [], ...routeInfo } = routeData;
+
+    // Iniciar una transacción
+    const { data: route, error } = await this.supabase
       .from('routes')
       .insert({
-        user_id: userId,
-        name,
-        description,
-        start_date: startDate,
-        end_date: endDate,
-        status: status || 'planned',
-        destinations: enrichedDestinations,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        ...routeInfo,
+        user_id: userId
       })
-      .select('id, name')
+      .select('id, title')
       .single();
-    
+
     if (error) {
-      throw new Error(`Error al crear ruta: ${error.message}`);
+      console.error('Error al crear la ruta:', error);
+      throw new Error('Error al crear la ruta: ' + error.message);
     }
-    
-    return data;
+
+    // Si hay lugares que agregar, hacerlo en lote
+    if (places.length > 0) {
+      const placesToInsert = places.map((place, index) => ({
+        ...place,
+        coordinates: place.coordinates ? JSON.stringify(place.coordinates) : null,
+        order_index: place.order_index !== undefined ? place.order_index : index,
+        route_id: route.id
+      }));
+
+      const { error: placesError } = await this.supabase
+        .from('places')
+        .insert(placesToInsert);
+
+      if (placesError) {
+        console.error('Error al crear los lugares:', placesError);
+        throw new Error('Se creó la ruta pero hubo un error al agregar los lugares');
+      }
+    }
+
+    return route;
   }
 
   /**
-   * Actualizar una ruta existente
-   * @param {string} routeId - ID de la ruta
-   * @param {string} userId - ID del usuario (para verificar permisos)
-   * @param {Object} routeData - Datos actualizados
-   * @returns {Promise<void>}
+   * Actualiza una ruta de viaje existente
+   * @param {string} routeId - ID de la ruta a actualizar
+   * @param {Object} routeData - Nuevos datos de la ruta
+   * @param {string} userId - ID del usuario que realiza la actualización
+   * @returns {Promise<Object>} - Resultado de la actualización
    */
-  async updateRoute(routeId, userId, routeData) {
+  async updateRoute(routeId, routeData, userId) {
     // Verificar que la ruta exista y pertenezca al usuario
-    const { data: existingRoute, error: fetchError } = await this.supabase
+    const { data: existingRoute, error: checkError } = await this.supabase
       .from('routes')
-      .select('user_id')
+      .select('id, user_id')
       .eq('id', routeId)
       .single();
-    
-    if (fetchError) {
-      throw new Error('Route not found');
+
+    if (checkError || !existingRoute) {
+      console.error('Error al verificar la ruta:', checkError);
+      throw new Error('Ruta no encontrada');
     }
-    
+
     if (existingRoute.user_id !== userId) {
-      throw new Error('Unauthorized access');
+      throw new Error('No tienes permiso para modificar esta ruta');
     }
-    
-    // Preparar datos para actualizar
-    const updateData = {};
-    
-    if (routeData.name) updateData.name = routeData.name;
-    if (routeData.description) updateData.description = routeData.description;
-    if (routeData.startDate) updateData.start_date = routeData.startDate;
-    if (routeData.endDate) updateData.end_date = routeData.endDate;
-    if (routeData.status) updateData.status = routeData.status;
-    
-    // Si se actualizan los destinos, validar y enriquecer
-    if (routeData.destinations) {
-      await this._validatePlaceIds(routeData.destinations.map(d => d.placeId));
-      updateData.destinations = await this._enrichDestinationsWithNames(routeData.destinations);
-    }
-    
-    updateData.updated_at = new Date().toISOString();
-    
+
     // Actualizar la ruta
     const { error: updateError } = await this.supabase
       .from('routes')
-      .update(updateData)
+      .update(routeData)
       .eq('id', routeId);
-    
+
     if (updateError) {
-      throw new Error(`Error al actualizar ruta: ${updateError.message}`);
+      console.error('Error al actualizar la ruta:', updateError);
+      throw new Error('Error al actualizar la ruta: ' + updateError.message);
     }
+
+    return { id: routeId };
   }
 
   /**
-   * Eliminar una ruta
-   * @param {string} routeId - ID de la ruta
-   * @param {string} userId - ID del usuario (para verificar permisos)
+   * Elimina una ruta de viaje
+   * @param {string} routeId - ID de la ruta a eliminar
+   * @param {string} userId - ID del usuario que solicita la eliminación
    * @returns {Promise<void>}
    */
   async deleteRoute(routeId, userId) {
     // Verificar que la ruta exista y pertenezca al usuario
-    const { data: existingRoute, error: fetchError } = await this.supabase
+    const { data: existingRoute, error: checkError } = await this.supabase
       .from('routes')
-      .select('user_id')
+      .select('id, user_id')
       .eq('id', routeId)
       .single();
-    
-    if (fetchError) {
-      throw new Error('Route not found');
+
+    if (checkError || !existingRoute) {
+      console.error('Error al verificar la ruta:', checkError);
+      throw new Error('Ruta no encontrada');
     }
-    
+
     if (existingRoute.user_id !== userId) {
-      throw new Error('Unauthorized access');
+      throw new Error('No tienes permiso para eliminar esta ruta');
     }
-    
-    // Eliminar la ruta
+
+    // Eliminar la ruta (en cascada se eliminarán los lugares y fotos)
     const { error: deleteError } = await this.supabase
       .from('routes')
       .delete()
       .eq('id', routeId);
-    
+
     if (deleteError) {
-      throw new Error(`Error al eliminar ruta: ${deleteError.message}`);
+      console.error('Error al eliminar la ruta:', deleteError);
+      throw new Error('Error al eliminar la ruta');
     }
   }
 
   /**
-   * Optimizar el orden de los destinos en una ruta
+   * Da like a una ruta
    * @param {string} routeId - ID de la ruta
-   * @param {string} userId - ID del usuario (para verificar permisos)
-   * @returns {Promise<Object>} - Información de la ruta optimizada
+   * @param {string} userId - ID del usuario que da like
+   * @returns {Promise<Object>} - Resultado de la operación
    */
-  async optimizeRoute(routeId, userId) {
-    // Obtener la ruta completa
-    const route = await this.getRouteById(routeId, userId);
-    
-    if (!route) {
-      throw new Error('Route not found');
-    }
-    
-    // Calcular la distancia original
-    const originalDistance = this._calculateTotalDistance(route.destinations);
-    
-    // Si hay menos de 3 destinos, no hay nada que optimizar
-    if (route.destinations.length < 3) {
-      return {
-        originalDistance,
-        optimizedDistance: originalDistance,
-        destinations: route.destinations.map(d => ({
-          order: d.order,
-          placeId: d.placeId,
-          placeName: d.placeName
-        }))
-      };
-    }
-    
-    // Aplicar algoritmo de optimización (TSP - Nearest Neighbor como ejemplo)
-    const optimizedDestinations = this._optimizeDestinationsOrder(route.destinations);
-    
-    // Calcular nueva distancia total
-    const optimizedDistance = this._calculateTotalDistance(optimizedDestinations);
-    
-    // Actualizar la ruta en la base de datos
-    await this.supabase
+  async likeRoute(routeId, userId) {
+    // Verificar que la ruta exista
+    const { data: route, error: routeError } = await this.supabase
       .from('routes')
-      .update({ 
-        destinations: optimizedDestinations,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', routeId);
-    
-    // Devolver información resumida de la optimización
-    return {
-      originalDistance,
-      optimizedDistance,
-      destinations: optimizedDestinations.map(d => ({
-        order: d.order,
-        placeId: d.placeId,
-        placeName: d.placeName
-      }))
-    };
-  }
-
-  /**
-   * Obtener información detallada de los destinos
-   * @param {Array} destinations - Lista básica de destinos
-   * @returns {Promise<Array>} - Lista enriquecida de destinos
-   * @private
-   */
-  async _getDetailedDestinations(destinations) {
-    // Aquí obtendríamos más detalles de cada destino desde la BD
-    // Como actividades, alojamiento, etc.
-    // Por simplicidad, solo añadimos campos ficticios
-    
-    return destinations.map(destination => ({
-      ...destination,
-      activities: destination.activities || []
-    }));
-  }
-
-  /**
-   * Validar que los IDs de lugares existan en la base de datos
-   * @param {Array<string>} placeIds - Lista de IDs de lugares
-   * @returns {Promise<void>}
-   * @private
-   */
-  async _validatePlaceIds(placeIds) {
-    // Query para verificar existencia de places
-    const { data, error } = await this.supabase
-      .from('places')
       .select('id')
-      .in('id', placeIds);
-    
+      .eq('id', routeId)
+      .single();
+
+    if (routeError || !route) {
+      console.error('Error al verificar la ruta:', routeError);
+      throw new Error('Ruta no encontrada');
+    }
+
+    // Verificar si ya dio like
+    const { data: existingLike, error: likeCheckError } = await this.supabase
+      .from('route_likes')
+      .select('id')
+      .eq('route_id', routeId)
+      .eq('user_id', userId)
+      .single();
+
+    // Si ya dio like, no hacer nada
+    if (existingLike) {
+      return { message: 'Ya has dado like a esta ruta' };
+    }
+
+    // Insertar el like
+    const { error: insertError } = await this.supabase
+      .from('route_likes')
+      .insert({
+        route_id: routeId,
+        user_id: userId
+      });
+
+    if (insertError) {
+      console.error('Error al dar like:', insertError);
+      throw new Error('Error al dar like a la ruta');
+    }
+
+    return { message: 'Like agregado correctamente' };
+  }
+
+  /**
+   * Quita like de una ruta
+   * @param {string} routeId - ID de la ruta
+   * @param {string} userId - ID del usuario que quita el like
+   * @returns {Promise<Object>} - Resultado de la operación
+   */
+  async unlikeRoute(routeId, userId) {
+    // Eliminar el like si existe
+    const { error } = await this.supabase
+      .from('route_likes')
+      .delete()
+      .eq('route_id', routeId)
+      .eq('user_id', userId);
+
     if (error) {
-      throw new Error(`Error al validar destinos: ${error.message}`);
+      console.error('Error al quitar like:', error);
+      throw new Error('Error al quitar like de la ruta');
     }
-    
-    // Verificar que todos los places existan
-    const foundIds = data.map(place => place.id);
-    const missingIds = placeIds.filter(id => !foundIds.includes(id));
-    
-    if (missingIds.length > 0) {
-      throw new Error(`Los siguientes destinos no existen: ${missingIds.join(', ')}`);
-    }
+
+    return { message: 'Like eliminado correctamente' };
   }
 
   /**
-   * Enriquecer destinos con nombres de lugares
-   * @param {Array} destinations - Lista de destinos con placeId
-   * @returns {Promise<Array>} - Destinos enriquecidos con nombre
-   * @private
+   * Obtiene los usuarios que dieron like a una ruta
+   * @param {string} routeId - ID de la ruta
+   * @param {number} limit - Límite de resultados
+   * @param {number} offset - Desplazamiento para paginación
+   * @returns {Promise<Array>} - Lista de usuarios
    */
-  async _enrichDestinationsWithNames(destinations) {
-    // Extraer IDs de lugares
-    const placeIds = destinations.map(d => d.placeId);
-    
-    // Obtener información de lugares
-    const { data: places, error } = await this.supabase
-      .from('places')
-      .select('id, name')
-      .in('id', placeIds);
-    
+  async getRouteLikes(routeId, limit = 20, offset = 0) {
+    const { data, error } = await this.supabase
+      .from('route_likes')
+      .select(`
+        user:user_id (
+          id,
+          username,
+          full_name
+        )
+      `)
+      .eq('route_id', routeId)
+      .range(offset, offset + limit - 1);
+
     if (error) {
-      throw new Error(`Error al obtener información de destinos: ${error.message}`);
+      console.error('Error al obtener likes:', error);
+      throw new Error('Error al obtener likes de la ruta');
     }
-    
-    // Crear mapa de ID a nombre
-    const placeMap = {};
-    places.forEach(place => {
-      placeMap[place.id] = place.name;
-    });
-    
-    // Enriquecer destinos con nombres
-    return destinations.map(destination => ({
-      ...destination,
-      placeName: placeMap[destination.placeId] || 'Destino desconocido'
-    }));
-  }
 
-  /**
-   * Calcular distancia total de una ruta
-   * @param {Array} destinations - Lista de destinos
-   * @returns {number} - Distancia total en km
-   * @private
-   */
-  _calculateTotalDistance(destinations) {
-    // En una implementación real, usaríamos las coordenadas 
-    // y un servicio de cálculo de distancias
-    // Por simplicidad, devolvemos un valor ficticio
-    return destinations.length > 1 ? 
-      (destinations.length - 1) * 500 + Math.random() * 200 : 0;
-  }
-
-  /**
-   * Optimizar orden de destinos (implementación simplificada)
-   * @param {Array} destinations - Lista original de destinos
-   * @returns {Array} - Lista optimizada de destinos
-   * @private
-   */
-  _optimizeDestinationsOrder(destinations) {
-    // En una implementación real implementaríamos un algoritmo TSP
-    // como Nearest Neighbor, 2-opt, o usar un servicio externo
-    
-    // Por simplicidad, aquí solo reordenamos y actualizamos el campo "order"
-    const optimized = [...destinations].sort((a, b) => a.placeId.localeCompare(b.placeId));
-    
-    return optimized.map((dest, index) => ({
-      ...dest,
-      order: index + 1
-    }));
+    // Transformar el resultado para obtener solo la información del usuario
+    return data ? data.map(item => item.user) : [];
   }
 }
 

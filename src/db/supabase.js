@@ -27,16 +27,19 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
  */
 async function supabasePlugin(fastify, options) {
   try {
-    // Intentamos una consulta simple que no dependa de tablas específicas
-    const { data, error } = await supabase.rpc('get_service_role');
-    
-    if (error && error.code !== '42P01') { // Ignoramos el error si es porque la función o tabla no existe
+    // Realizar una consulta simple para verificar la conexión (solo verificar tablas, no funciones RPC)
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .limit(1);
+
+    // Si hay un error, pero es porque la tabla no existe, no es crítico
+    if (error && error.code !== '42P01') {
       fastify.log.error('Error al conectar con Supabase:', error.message);
       throw error;
     }
-    
+
     fastify.log.info('Conexión con Supabase establecida correctamente');
-    fastify.log.warn('Nota: Es posible que necesites crear las tablas. Ejecuta: npm run seed');
   } catch (err) {
     // Si el error es por tablas que no existen, lo consideramos no crítico
     if (err.code === '42P01') {
@@ -48,8 +51,10 @@ async function supabasePlugin(fastify, options) {
     }
   }
 
+  // Decorar instancia de Fastify con el cliente
   fastify.decorate('supabase', supabase);
-  
+
+  // Decorar request con el cliente
   fastify.decorateRequest('supabase', {
     getter() {
       return supabase;
@@ -59,5 +64,5 @@ async function supabasePlugin(fastify, options) {
 
 module.exports = {
   supabase,
-  supabasePlugin
+  supabasePlugin: fp(supabasePlugin)  // Asegurar que el plugin se encapsule correctamente
 }; 
