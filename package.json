@@ -24,7 +24,8 @@
   },
   "devDependencies": {
     "jest": "^29.6.2",
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "pino-pretty": "^13.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

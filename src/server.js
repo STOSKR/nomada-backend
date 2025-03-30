@@ -5,7 +5,16 @@ require('dotenv').config();
 
 // Importar dependencias
 const fastify = require('fastify')({
-  logger: true
+  logger: {
+    level: 'error',
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        translateTime: 'HH:MM:ss Z',
+        ignore: 'pid,hostname',
+      }
+    }
+  }
 });
 
 // Importar plugins y componentes propios
@@ -60,7 +69,7 @@ async function registerPlugins() {
         description: 'API para la aplicación de viajeros Nómada',
         version: '1.0.0'
       },
-      host: `localhost:${PORT}`,
+      host: HOST === '0.0.0.0' ? `localhost:${PORT}` : `${HOST}:${PORT}`,
       schemes: ['http', 'https'],
       consumes: ['application/json'],
       produces: ['application/json'],
@@ -71,7 +80,8 @@ async function registerPlugins() {
           in: 'header'
         }
       }
-    }
+    },
+    exposeRoute: true
   });
 
   // UI de Swagger
@@ -80,13 +90,19 @@ async function registerPlugins() {
     uiConfig: {
       docExpansion: 'list',
       deepLinking: false
-    }
+    },
+    uiHooks: {
+      onRequest: function (request, reply, next) { next() },
+      preHandler: function (request, reply, next) { next() }
+    },
+    staticCSP: true,
+    transformStaticCSP: (header) => header
   });
 }
 
 // Registro de rutas
 async function registerRoutes() {
-  
+
   fastify.get('/health', {
     schema: {
       description: 'Verificación de salud del servidor',
@@ -114,7 +130,7 @@ async function registerRoutes() {
 // Manejador global de errores
 fastify.setErrorHandler((error, request, reply) => {
   fastify.log.error(error);
-  
+
   // Errores personalizados con código de estado
   if (error.statusCode) {
     return reply.code(error.statusCode).send({
@@ -122,7 +138,7 @@ fastify.setErrorHandler((error, request, reply) => {
       message: error.message
     });
   }
-  
+
   // Errores de validación de Fastify
   if (error.validation) {
     return reply.code(400).send({
@@ -131,11 +147,11 @@ fastify.setErrorHandler((error, request, reply) => {
       errors: error.validation
     });
   }
-  
+
   // Error genérico
   const statusCode = error.statusCode || 500;
   const message = error.message || 'Error interno del servidor';
-  
+
   reply.code(statusCode).send({
     success: false,
     message
@@ -157,17 +173,41 @@ async function start() {
     // Asegurarnos de que primero se registran los plugins
     console.log('Registrando plugins...');
     await registerPlugins();
-    
+
     // Después registrar las rutas
     console.log('Registrando rutas...');
     await registerRoutes();
-    
-    // Iniciar servidor
-    await fastify.listen({ port: PORT, host: HOST });
-    fastify.log.info(`Servidor escuchando en ${fastify.server.address().port}`);
-    fastify.log.info(`Documentación disponible en http://localhost:${PORT}/documentacion`);
+
+    // Iniciar servidor - intentar con puerto inicial
+    let currentPort = PORT;
+    let maxAttempts = 10;
+    let attempts = 0;
+    let listening = false;
+
+    while (!listening && attempts < maxAttempts) {
+      try {
+        await fastify.listen({ port: currentPort, host: HOST });
+        listening = true;
+      } catch (listenError) {
+        if (listenError.code === 'EADDRINUSE') {
+          console.log(`Puerto ${currentPort} en uso, intentando con ${currentPort + 1}...`);
+          currentPort++;
+          attempts++;
+        } else {
+          throw listenError; // Otro tipo de error, lo propagamos
+        }
+      }
+    }
+
+    if (!listening) {
+      throw new Error(`No se pudo encontrar un puerto disponible después de ${maxAttempts} intentos.`);
+    }
+
+    console.log(`Servidor escuchando en http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${currentPort}`);
+    console.log(`Documentación disponible en http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${currentPort}/documentacion`);
   } catch (err) {
-    fastify.log.error(err);
+    fastify.log.error('Error al iniciar el servidor:', err);
+    console.error('Detalles del error:', err.message, err.code || '');
     process.exit(1);
   }
 }
