@@ -115,26 +115,7 @@ async function registerPlugins() {
 // Registro de rutas
 async function registerRoutes() {
 
-  fastify.get('/health', {
-    schema: {
-      description: 'Verificación de salud del servidor',
-      tags: ['system'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            status: { type: 'string' },
-            timestamp: { type: 'string' }
-          }
-        }
-      }
-    }
-  }, async () => {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString()
-    };
-  });
+
 
   await fastify.register(require('./routes'));
 }

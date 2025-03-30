@@ -11,27 +11,6 @@ const recommendationRoutes = require('./recommendation.routes');
  * @param {Object} options - Opciones
  */
 async function routes(fastify, options) {
-  // Definir ruta base para comprobar que el API está funcionando
-  fastify.get('/', {
-    schema: {
-      description: 'Ruta base para comprobar si la API está funcionando',
-      tags: ['system'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            status: { type: 'string' },
-            message: { type: 'string' }
-          }
-        }
-      }
-    }
-  }, async () => {
-    return {
-      status: 'ok',
-      message: 'API de Nómada funcionando correctamente'
-    };
-  });
 
   // Rutas de autenticación
   fastify.register(authRoutes, { prefix: '/auth' });
