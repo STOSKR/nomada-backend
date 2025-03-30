@@ -19,6 +19,7 @@
     "dotenv": "^16.3.1",
     "fastify": "^4.21.0",
     "fastify-plugin": "^4.5.1",
+    "nomada-backend": "file:",
     "pg": "^8.14.1"
   },
   "devDependencies": {
@@ -29,5 +30,9 @@
     "node": ">=18.0.0"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": []
 }

@@ -1,6 +1,3 @@
-/**
- * Rutas de usuarios: autenticación, registro, perfil y preferencias
- */
 const UserService = require('../services/user.service');
 const { supabase } = require('../db/supabase');
 
@@ -38,7 +35,7 @@ const schemas = {
       }
     }
   },
-  
+
   login: {
     description: 'Iniciar sesión de usuario',
     tags: ['usuarios'],
@@ -68,7 +65,7 @@ const schemas = {
       }
     }
   },
-  
+
   getProfile: {
     description: 'Obtener perfil del usuario',
     tags: ['usuarios'],
@@ -101,7 +98,7 @@ const schemas = {
       }
     }
   },
-  
+
   updatePreferences: {
     description: 'Actualizar preferencias de viaje del usuario',
     tags: ['usuarios'],
@@ -129,7 +126,7 @@ const schemas = {
       }
     }
   },
-  
+
   addVisitedCountry: {
     description: 'Añadir país visitado al perfil del usuario',
     tags: ['usuarios'],
@@ -163,15 +160,15 @@ const schemas = {
 async function userRoutes(fastify, options) {
   // Usar el cliente Supabase importado como respaldo si el decorador no está disponible
   const supabaseClient = fastify.supabase || supabase;
-  
+
   if (!supabaseClient) {
     fastify.log.error('Error: Cliente de Supabase no disponible');
     throw new Error('Cliente de Supabase no disponible en rutas de usuario');
   }
-  
+
   // Instancia del servicio de usuarios
   const userService = new UserService(supabaseClient);
-  
+
   // Registro de usuario
   fastify.post('/register', { schema: schemas.register }, async (request, reply) => {
     try {
@@ -191,13 +188,13 @@ async function userRoutes(fastify, options) {
     try {
       const { email, password } = request.body;
       const result = await userService.loginUser(email, password);
-      
+
       // Generar token JWT
       const token = fastify.jwt.sign({
         id: result.user.id,
         email: result.user.email
       });
-      
+
       return {
         success: true,
         token,
