@@ -20,8 +20,20 @@ const fastify = require('fastify')({
 // Importar plugins y componentes propios
 const { supabasePlugin, supabase } = require('./db/supabase');
 
+// Colores para la consola
+const colors = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m'
+};
+
 // Verificar que el cliente de Supabase está disponible
-console.log('Estado del cliente Supabase:', supabase ? 'Inicializado' : 'No inicializado');
+console.log(`${colors.bright}${colors.magenta}⚡ NÓMADA API${colors.reset} - ${colors.cyan}Iniciando servidor...${colors.reset}`);
+console.log(`${colors.yellow}▶ Supabase:${colors.reset} ${supabase ? colors.green + 'Conectado' : colors.red + 'Desconectado'}${colors.reset}`);
 
 // Configuración básica
 const PORT = process.env.PORT || 3000;
@@ -171,11 +183,11 @@ process.on('unhandledRejection', (reason, promise) => {
 async function start() {
   try {
     // Asegurarnos de que primero se registran los plugins
-    console.log('Registrando plugins...');
+    console.log(`\n${colors.yellow}▶ Inicialización:${colors.reset} Cargando plugins...`);
     await registerPlugins();
 
     // Después registrar las rutas
-    console.log('Registrando rutas...');
+    console.log(`${colors.yellow}▶ Inicialización:${colors.reset} Configurando rutas...`);
     await registerRoutes();
 
     // Iniciar servidor - intentar con puerto inicial
@@ -184,13 +196,15 @@ async function start() {
     let attempts = 0;
     let listening = false;
 
+    console.log(`${colors.yellow}▶ Servidor:${colors.reset} Iniciando en puerto ${colors.cyan}${currentPort}${colors.reset}`);
+
     while (!listening && attempts < maxAttempts) {
       try {
         await fastify.listen({ port: currentPort, host: HOST });
         listening = true;
       } catch (listenError) {
         if (listenError.code === 'EADDRINUSE') {
-          console.log(`Puerto ${currentPort} en uso, intentando con ${currentPort + 1}...`);
+          console.log(`${colors.yellow}▶ Puerto ${currentPort}:${colors.reset} ${colors.magenta}En uso${colors.reset}, intentando con ${colors.cyan}${currentPort + 1}${colors.reset}...`);
           currentPort++;
           attempts++;
         } else {
@@ -203,11 +217,12 @@ async function start() {
       throw new Error(`No se pudo encontrar un puerto disponible después de ${maxAttempts} intentos.`);
     }
 
-    console.log(`Servidor escuchando en http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${currentPort}`);
-    console.log(`Documentación disponible en http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${currentPort}/documentacion`);
+    console.log(`\n${colors.bright}${colors.green}✓ Servidor iniciado correctamente${colors.reset}`);
+    console.log(`${colors.bright}${colors.blue}🌐 API:${colors.reset} http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${currentPort}`);
+    console.log(`${colors.bright}${colors.blue}📚 Documentación:${colors.reset} http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${currentPort}/documentacion\n`);
   } catch (err) {
     fastify.log.error('Error al iniciar el servidor:', err);
-    console.error('Detalles del error:', err.message, err.code || '');
+    console.error(`${colors.bright}${colors.red}✗ ERROR:${colors.reset} ${err.message} ${err.code ? `(${err.code})` : ''}`);
     process.exit(1);
   }
 }
