@@ -221,24 +221,6 @@ async function authRoutes(fastify, options) {
         }
     });
 
-    // Ruta para verificar token
-    fastify.get('/verify', {
-        schema: schemas.verify,
-        preValidation: [fastify.authenticate]
-    }, async (request, reply) => {
-        try {
-            const userId = request.user.id;
-            const result = await authService.verifyToken(userId);
-            return result;
-        } catch (error) {
-            request.log.error(error);
-            return reply.code(401).send({
-                valid: false,
-                message: error.message
-            });
-        }
-    });
-
     // Ruta para solicitar restablecimiento de contraseña
     fastify.post('/reset-password', { schema: schemas.resetPassword }, async (request, reply) => {
         try {
