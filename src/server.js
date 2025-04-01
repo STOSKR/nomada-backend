@@ -199,7 +199,6 @@ async function start() {
     }
 
     console.log(`\n${colors.bright}${colors.green}✓ Servidor iniciado correctamente${colors.reset}`);
-    console.log(`${colors.bright}${colors.blue}🌐 API:${colors.reset} http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${currentPort}`);
     console.log(`${colors.bright}${colors.blue}📚 Documentación:${colors.reset} http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${currentPort}/documentacion\n`);
   } catch (err) {
     fastify.log.error('Error al iniciar el servidor:', err);
