@@ -9,11 +9,11 @@ const schemas = {
             type: 'object',
             required: ['email', 'password', 'username'],
             properties: {
-                email: { type: 'string', format: 'email' },
-                password: { type: 'string', minLength: 8 },
-                username: { type: 'string', minLength: 3 },
-                fullName: { type: 'string' },
-                bio: { type: 'string' }
+                email: { type: 'string', format: 'email', description: 'Correo electrónico (requerido)' },
+                password: { type: 'string', minLength: 8, description: 'Contraseña (requerido, mínimo 8 caracteres)' },
+                username: { type: 'string', minLength: 3, description: 'Nombre de usuario (requerido, mínimo 3 caracteres)' },
+                fullName: { type: 'string', description: 'Nombre completo' },
+                bio: { type: 'string', description: 'Biografía del usuario' }
             }
         },
         response: {
@@ -43,8 +43,8 @@ const schemas = {
             type: 'object',
             required: ['email', 'password'],
             properties: {
-                email: { type: 'string', format: 'email' },
-                password: { type: 'string' }
+                email: { type: 'string', format: 'email', description: 'Correo electrónico (requerido)' },
+                password: { type: 'string', description: 'Contraseña (requerido)' }
             }
         },
         response: {
@@ -110,7 +110,7 @@ const schemas = {
             type: 'object',
             required: ['email'],
             properties: {
-                email: { type: 'string', format: 'email' }
+                email: { type: 'string', format: 'email', description: 'Correo electrónico (requerido)' }
             }
         },
         response: {
