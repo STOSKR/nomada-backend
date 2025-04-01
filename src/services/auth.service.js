@@ -100,6 +100,9 @@ class AuthService {
             throw new Error('Credenciales incorrectas');
         }
 
+        // Loguear el ID del usuario que se autenticó
+        console.log('Usuario autenticado con ID:', authData.user.id);
+
         const { data: userData, error: profileError } = await this.supabase
             .from('users')
             .select('id, username, email, full_name, bio')
@@ -107,7 +110,8 @@ class AuthService {
             .single();
 
         if (profileError) {
-            throw new Error('Error al obtener datos del usuario');
+            console.error('Error fetching user profile:', profileError);
+            throw new Error(`Error al obtener datos del usuario: ${profileError.message || profileError.details || 'Detalles no disponibles'}`);
         }
 
         return {
