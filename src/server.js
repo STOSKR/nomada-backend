@@ -67,8 +67,34 @@ async function registerPlugins() {
   // Decorador para verificar autenticación en rutas protegidas
   fastify.decorate('authenticate', async (request, reply) => {
     try {
-      await request.jwtVerify();
+      // Obtener el token de la cabecera Authorization
+      const authHeader = request.headers.authorization;
+      console.log('Auth Header:', authHeader);
+
+      if (!authHeader) {
+        console.log('No se encontró cabecera de autorización');
+        return reply.code(401).send({ success: false, message: 'No autorizado: Falta token' });
+      }
+
+      // Si el token tiene el formato "Bearer <token>", extraer solo el token
+      let token = authHeader;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+
+      console.log('Token a verificar:', token.substring(0, 15) + '...');
+
+      // Verificar el token
+      try {
+        const decoded = fastify.jwt.verify(token);
+        request.user = decoded;
+        console.log('Token verificado para usuario:', decoded.id);
+      } catch (err) {
+        console.log('Error al verificar token:', err.message);
+        return reply.code(401).send({ success: false, message: 'No autorizado: Token inválido' });
+      }
     } catch (err) {
+      console.log('Error en autenticación:', err.message);
       reply.code(401).send({ success: false, message: 'No autorizado' });
     }
   });
@@ -88,10 +114,16 @@ async function registerPlugins() {
       securityDefinitions: {
         apiKey: {
           type: 'apiKey',
+          in: 'header',
           name: 'Authorization',
-          in: 'header'
+          description: 'Token JWT para autenticación'
         }
-      }
+      },
+      security: [
+        {
+          apiKey: []
+        }
+      ]
     },
     exposeRoute: true
   });

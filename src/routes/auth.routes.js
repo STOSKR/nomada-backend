@@ -1,5 +1,15 @@
 const AuthService = require('../services/auth.service');
 
+// Configuración de seguridad para Swagger
+const securitySchemes = {
+    apiKey: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'Authorization',
+        description: 'Token JWT para autenticación'
+    }
+};
+
 // Esquemas para validación y documentación
 const schemas = {
     signup: {
@@ -72,6 +82,13 @@ const schemas = {
         security: [{ apiKey: [] }],
         response: {
             200: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' }
+                }
+            },
+            401: {
                 type: 'object',
                 properties: {
                     success: { type: 'boolean' },
@@ -193,7 +210,8 @@ async function authRoutes(fastify, options) {
     }, async (request, reply) => {
         try {
             const result = await authService.logout();
-            return result;
+
+            return reply.code(200).send(result);
         } catch (error) {
             request.log.error(error);
             return reply.code(500).send({

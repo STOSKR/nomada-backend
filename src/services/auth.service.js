@@ -125,16 +125,27 @@ class AuthService {
      * @returns {Promise<Object>} - Confirmación de cierre de sesión
      */
     async logout() {
-        const { error } = await this.supabase.auth.signOut();
+        try {
+            // Cerrar sesión en Supabase
+            const { error: supabaseError } = await this.supabase.auth.signOut();
 
-        if (error) {
+            if (supabaseError) {
+                throw new Error(`Error al cerrar sesión en Supabase: ${supabaseError.message}`);
+            }
+
+            // En el servidor no tenemos acceso a localStorage o sessionStorage
+            // Estas líneas solo funcionan en el navegador, las comentamos
+            // localStorage.removeItem('token');
+            // sessionStorage.removeItem('token');
+
+            return {
+                success: true,
+                message: 'Sesión cerrada correctamente'
+            };
+        } catch (error) {
+            console.error('Error durante el logout:', error);
             throw new Error(`Error al cerrar sesión: ${error.message}`);
         }
-
-        return {
-            success: true,
-            message: 'Sesión cerrada correctamente'
-        };
     }
 
     /**
