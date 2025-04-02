@@ -277,32 +277,6 @@ async function userRoutes(fastify, options) {
     }
   });
 
-  // Inicio de sesión
-  fastify.post('/login', { schema: schemas.login }, async (request, reply) => {
-    try {
-      const { email, password } = request.body;
-      const result = await userService.loginUser(email, password);
-
-      // Generar token JWT
-      const token = fastify.jwt.sign({
-        id: result.user.id,
-        email: result.user.email
-      });
-
-      return {
-        success: true,
-        token,
-        user: result.user
-      };
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(401).send({
-        success: false,
-        message: error.message
-      });
-    }
-  });
-
   // Obtener perfil (autenticado)
   fastify.get('/profile', {
     schema: schemas.getProfile,

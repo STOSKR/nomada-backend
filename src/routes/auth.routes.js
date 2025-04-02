@@ -68,7 +68,21 @@ const schemas = {
                         properties: {
                             id: { type: 'string' },
                             username: { type: 'string' },
-                            email: { type: 'string' }
+                            email: { type: 'string' },
+                            fullName: { type: 'string' },
+                            bio: { type: 'string' },
+                            preferences: {
+                                type: 'object',
+                                properties: {
+                                    favoriteDestinations: { type: 'array', items: { type: 'string' } },
+                                    travelStyle: { type: 'string', enum: ['adventure', 'relax', 'culture', 'gastronomy'] },
+                                    budget: { type: 'string', enum: ['budget', 'mid-range', 'luxury'] }
+                                }
+                            },
+                            visitedCountries: { type: 'array', items: { type: 'string' } },
+                            followersCount: { type: 'number' },
+                            followingCount: { type: 'number' },
+                            isFollowing: { type: ['boolean', 'null'] }
                         }
                     }
                 }
@@ -189,10 +203,14 @@ async function authRoutes(fastify, options) {
                 email: result.user.email
             });
 
+            // Obtener perfil completo del usuario desde el servicio de usuarios
+            const userService = new (require('../services/user.service'))(fastify.supabase);
+            const profileData = await userService.getUserProfile(result.user.id, result.user.id);
+
             return {
                 success: true,
-                user: result.user,
-                token
+                token,
+                user: profileData
             };
         } catch (error) {
             request.log.error(error);
