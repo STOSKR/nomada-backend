@@ -4,69 +4,7 @@ const { supabase } = require('../db/supabase');
 
 // Esquemas para validación y documentación
 const schemas = {
-  register: {
-    description: 'Registrar un nuevo usuario',
-    tags: ['usuarios'],
-    body: {
-      type: 'object',
-      required: ['email', 'password', 'username'],
-      properties: {
-        email: { type: 'string', format: 'email' },
-        password: { type: 'string', minLength: 8 },
-        username: { type: 'string', minLength: 3 },
-        fullName: { type: 'string' },
-        bio: { type: 'string' }
-      }
-    },
-    response: {
-      201: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean' },
-          message: { type: 'string' },
-          user: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              username: { type: 'string' },
-              email: { type: 'string' }
-            }
-          }
-        }
-      }
-    }
-  },
-
-  login: {
-    description: 'Iniciar sesión de usuario',
-    tags: ['usuarios'],
-    body: {
-      type: 'object',
-      required: ['email', 'password'],
-      properties: {
-        email: { type: 'string', format: 'email' },
-        password: { type: 'string' }
-      }
-    },
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean' },
-          token: { type: 'string' },
-          user: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              username: { type: 'string' },
-              email: { type: 'string' }
-            }
-          }
-        }
-      }
-    }
-  },
-
+  
   getProfile: {
     description: 'Obtener perfil del usuario',
     tags: ['usuarios'],
@@ -92,7 +30,9 @@ const schemas = {
                   budget: { type: 'string', enum: ['budget', 'mid-range', 'luxury'] }
                 }
               },
-              visitedCountries: { type: 'array', items: { type: 'string' } }
+              visitedCountries: { type: 'array', items: { type: 'string' } },
+              followersCount: { type: 'number' },
+              followingCount: { type: 'number' }
             }
           }
         }
@@ -262,6 +202,44 @@ const schemas = {
         }
       }
     }
+  },
+
+  // Schema para obtener perfil de usuario por ID
+  getUserById: {
+    description: 'Obtener perfil de un usuario por ID',
+    tags: ['usuarios'],
+    hide: true,
+    security: [{ apiKey: [] }],
+    params: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' }
+      },
+      required: ['id']
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          user: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              username: { type: 'string' },
+              email: { type: 'string' },
+              fullName: { type: 'string' },
+              bio: { type: 'string' },
+              preferences: { type: 'object' },
+              visitedCountries: { type: 'array', items: { type: 'string' } },
+              followersCount: { type: 'number' },
+              followingCount: { type: 'number' },
+              isFollowing: { type: ['boolean', 'null'] }
+            }
+          }
+        }
+      }
+    }
   }
 };
 
@@ -332,7 +310,7 @@ async function userRoutes(fastify, options) {
   }, async (request, reply) => {
     try {
       const userId = request.user.id;
-      const result = await userService.getUserProfile(userId);
+      const result = await userService.getUserProfile(userId, userId);
       return {
         success: true,
         user: result
@@ -348,6 +326,7 @@ async function userRoutes(fastify, options) {
 
   // Obtener perfil de usuario por ID
   fastify.get('/:id', {
+    schema: schemas.getUserById,
     preValidation: [fastify.authenticate]
   }, async (request, reply) => {
     try {

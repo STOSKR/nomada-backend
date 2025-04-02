@@ -16,105 +16,6 @@ class UserService {
   }
 
   /**
-   * Registrar un nuevo usuario
-   * @param {Object} userData - Datos del usuario a registrar
-   * @returns {Promise<Object>} - Usuario registrado
-   */
-  async registerUser(userData) {
-    const { email, password, username, fullName, bio } = userData;
-
-    // Verificar si el email ya está registrado
-    const { data: existingEmail } = await this.supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-
-    if (existingEmail) {
-      throw new Error('El email ya está registrado');
-    }
-
-    // Verificar si el username ya está en uso
-    const { data: existingUsername } = await this.supabase
-      .from('users')
-      .select('id')
-      .eq('username', username)
-      .maybeSingle();
-
-    if (existingUsername) {
-      throw new Error('El nombre de usuario ya está en uso');
-    }
-
-    // Registrar usuario en Supabase Auth
-    const { data: authData, error: authError } = await this.supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (authError) {
-      throw new Error(`Error al registrar usuario: ${authError.message}`);
-    }
-
-    // Crear perfil en la tabla users
-    const { data: userProfile, error: profileError } = await this.supabase
-      .from('users')
-      .insert({
-        id: authData.user.id,
-        email,
-        username,
-        full_name: fullName || null,
-        bio: bio || null,
-        preferences: {},
-        visited_countries: []
-      })
-      .select('id, username, email')
-      .single();
-
-    if (profileError) {
-      // Si hay error al crear perfil, eliminar el usuario de auth para mantener consistencia
-      await this.supabase.auth.admin.deleteUser(authData.user.id);
-      throw new Error(`Error al crear perfil: ${profileError.message}`);
-    }
-
-    return {
-      success: true,
-      message: 'Usuario registrado correctamente',
-      user: userProfile
-    };
-  }
-
-  /**
-   * Iniciar sesión de usuario
-   * @param {string} email - Email del usuario
-   * @param {string} password - Contraseña del usuario
-   * @returns {Promise<Object>} - Datos del usuario autenticado
-   */
-  async loginUser(email, password) {
-    const { data: authData, error: authError } = await this.supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (authError) {
-      throw new Error('Credenciales incorrectas');
-    }
-
-    const { data: userData, error: profileError } = await this.supabase
-      .from('users')
-      .select('id, username, email')
-      .eq('id', authData.user.id)
-      .single();
-
-    if (profileError) {
-      throw new Error('Error al obtener datos del usuario');
-    }
-
-    return {
-      user: userData
-    };
-  }
-
-  /**
    * Obtener perfil completo del usuario
    * @param {string} userId - ID del usuario
    * @param {string} currentUserId - ID del usuario que hace la solicitud (opcional)
@@ -156,10 +57,10 @@ class UserService {
       email: data.email,
       fullName: data.full_name,
       bio: data.bio,
-      preferences: data.preferences || {},
-      visitedCountries: data.visited_countries || [],
-      followersCount: data.followers_count || 0,
-      followingCount: data.following_count || 0,
+      preferences: data.preferences,
+      visitedCountries: data.visited_countries,
+      followersCount: data.followers_count,
+      followingCount: data.following_count,
       isFollowing
     };
   }

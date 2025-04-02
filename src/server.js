@@ -125,6 +125,7 @@ async function registerPlugins() {
         }
       ]
     },
+    hideUntagged: true,
     exposeRoute: true
   });
 
