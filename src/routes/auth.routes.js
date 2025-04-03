@@ -17,12 +17,12 @@ const schemas = {
         tags: ['autenticación'],
         body: {
             type: 'object',
-            required: ['email', 'password', 'username'],
+            required: ['email', 'password', 'nomada_id'],
             properties: {
                 email: { type: 'string', format: 'email', description: 'Correo electrónico (requerido)' },
                 password: { type: 'string', minLength: 8, description: 'Contraseña (requerido, mínimo 8 caracteres)' },
-                username: { type: 'string', minLength: 3, description: 'Nombre de usuario (requerido, mínimo 3 caracteres)' },
-                fullName: { type: 'string', description: 'Nombre completo' },
+                nomada_id: { type: 'string', minLength: 3, description: 'Identificador único de usuario (requerido, mínimo 3 caracteres)' },
+                username: { type: 'string', description: 'Nombre visible del usuario' },
                 bio: { type: 'string', description: 'Biografía del usuario' }
             }
         },
@@ -36,6 +36,7 @@ const schemas = {
                         type: 'object',
                         properties: {
                             id: { type: 'string' },
+                            nomada_id: { type: 'string' },
                             username: { type: 'string' },
                             email: { type: 'string' }
                         }
@@ -67,9 +68,9 @@ const schemas = {
                         type: 'object',
                         properties: {
                             id: { type: 'string' },
+                            nomada_id: { type: 'string' },
                             username: { type: 'string' },
                             email: { type: 'string' },
-                            fullName: { type: 'string' },
                             bio: { type: 'string' },
                             preferences: {
                                 type: 'object',
@@ -82,6 +83,7 @@ const schemas = {
                             visitedCountries: { type: 'array', items: { type: 'string' } },
                             followersCount: { type: 'number' },
                             followingCount: { type: 'number' },
+                            routesCount: { type: 'number' },
                             isFollowing: { type: ['boolean', 'null'] }
                         }
                     }
@@ -125,6 +127,7 @@ const schemas = {
                         type: 'object',
                         properties: {
                             id: { type: 'string' },
+                            nomada_id: { type: 'string' },
                             username: { type: 'string' },
                             email: { type: 'string' }
                         }

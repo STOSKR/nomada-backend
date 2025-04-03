@@ -21,7 +21,7 @@ class AuthService {
      * @returns {Promise<Object>} - Usuario registrado y token de sesión
      */
     async signup(userData) {
-        const { email, password, username, fullName, bio } = userData;
+        const { email, password, nomada_id, username, bio } = userData;
 
         // Verificar si el email ya está registrado
         const { data: existingEmail } = await this.supabase
@@ -34,15 +34,15 @@ class AuthService {
             throw new Error('El email ya está registrado');
         }
 
-        // Verificar si el username ya está en uso
-        const { data: existingUsername } = await this.supabase
+        // Verificar si el nomada_id ya está en uso
+        const { data: existingNomadaId } = await this.supabase
             .from('users')
             .select('id')
-            .eq('username', username)
+            .eq('nomada_id', nomada_id)
             .maybeSingle();
 
-        if (existingUsername) {
-            throw new Error('El nombre de usuario ya está en uso');
+        if (existingNomadaId) {
+            throw new Error('El identificador de nómada ya está en uso');
         }
 
         // Registrar usuario en Supabase Auth
@@ -61,13 +61,13 @@ class AuthService {
             .insert({
                 id: authData.user.id,
                 email,
-                username,
-                full_name: fullName || null,
+                nomada_id,
+                username: username || null,
                 bio: bio || null,
                 preferences: {},
                 visited_countries: []
             })
-            .select('id, username, email')
+            .select('id, nomada_id, username, email')
             .single();
 
         if (profileError) {
@@ -105,7 +105,7 @@ class AuthService {
 
         const { data: userData, error: profileError } = await this.supabase
             .from('users')
-            .select('id, username, email, full_name, bio')
+            .select('id, nomada_id, username, email, bio')
             .eq('id', authData.user.id)
             .single();
 
@@ -156,7 +156,7 @@ class AuthService {
     async verifyToken(userId) {
         const { data: userData, error } = await this.supabase
             .from('users')
-            .select('id, username, email, full_name, bio')
+            .select('id, nomada_id, username, email, bio')
             .eq('id', userId)
             .single();
 

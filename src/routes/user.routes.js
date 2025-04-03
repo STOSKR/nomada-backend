@@ -4,7 +4,7 @@ const { supabase } = require('../db/supabase');
 
 // Esquemas para validación y documentación
 const schemas = {
-  
+
   getProfile: {
     description: 'Obtener perfil del usuario',
     tags: ['usuarios'],
@@ -18,9 +18,9 @@ const schemas = {
             type: 'object',
             properties: {
               id: { type: 'string' },
+              nomada_id: { type: 'string' },
               username: { type: 'string' },
               email: { type: 'string' },
-              fullName: { type: 'string' },
               bio: { type: 'string' },
               preferences: {
                 type: 'object',
@@ -32,7 +32,8 @@ const schemas = {
               },
               visitedCountries: { type: 'array', items: { type: 'string' } },
               followersCount: { type: 'number' },
-              followingCount: { type: 'number' }
+              followingCount: { type: 'number' },
+              routesCount: { type: 'number' }
             }
           }
         }
@@ -226,14 +227,15 @@ const schemas = {
             type: 'object',
             properties: {
               id: { type: 'string' },
+              nomada_id: { type: 'string' },
               username: { type: 'string' },
               email: { type: 'string' },
-              fullName: { type: 'string' },
               bio: { type: 'string' },
               preferences: { type: 'object' },
               visitedCountries: { type: 'array', items: { type: 'string' } },
               followersCount: { type: 'number' },
               followingCount: { type: 'number' },
+              routesCount: { type: 'number' },
               isFollowing: { type: ['boolean', 'null'] }
             }
           }

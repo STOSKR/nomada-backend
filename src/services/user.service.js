@@ -24,7 +24,7 @@ class UserService {
   async getUserProfile(userId, currentUserId = null) {
     const { data, error } = await this.supabase
       .from('users')
-      .select('id, username, email, full_name, bio, preferences, visited_countries, followers_count, following_count')
+      .select('id, nomada_id, username, email, bio, preferences, visited_countries, followers_count, following_count')
       .eq('id', userId)
       .single();
 
@@ -34,6 +34,16 @@ class UserService {
 
     if (!data) {
       throw new Error('Usuario no encontrado');
+    }
+
+    // Contar el número de rutas creadas por el usuario
+    const { count: routesCount, error: routesError } = await this.supabase
+      .from('routes')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (routesError) {
+      console.error('Error al contar rutas del usuario:', routesError);
     }
 
     // Verificar si el usuario actual sigue a este perfil
@@ -53,14 +63,15 @@ class UserService {
 
     return {
       id: data.id,
+      nomada_id: data.nomada_id,
       username: data.username,
       email: data.email,
-      fullName: data.full_name,
       bio: data.bio,
       preferences: data.preferences,
       visitedCountries: data.visited_countries,
       followersCount: data.followers_count,
       followingCount: data.following_count,
+      routesCount: routesCount || 0,
       isFollowing
     };
   }
