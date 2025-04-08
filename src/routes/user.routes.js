@@ -22,6 +22,7 @@ const schemas = {
               username: { type: 'string' },
               email: { type: 'string' },
               bio: { type: 'string' },
+              avatar_url: { type: 'string', description: 'URL del avatar del usuario' },
               preferences: {
                 type: 'object',
                 properties: {
@@ -45,12 +46,14 @@ const schemas = {
     description: 'Actualizar perfil del usuario',
     tags: ['usuarios'],
     security: [{ apiKey: [] }],
+    consumes: ['multipart/form-data'],
     body: {
       type: 'object',
       properties: {
         username: { type: 'string', description: 'Nombre visible del usuario' },
         nomada_id: { type: 'string', minLength: 3, description: 'ID único del nómada (debe ser único)' },
-        bio: { type: 'string', description: 'Biografía del usuario' }
+        bio: { type: 'string', description: 'Biografía del usuario' },
+        avatar: { type: 'string', format: 'binary', description: 'Archivo de imagen para el avatar del usuario' }
       }
     },
     response: {
@@ -269,6 +272,7 @@ const schemas = {
               username: { type: 'string' },
               email: { type: 'string' },
               bio: { type: 'string' },
+              avatar_url: { type: 'string', description: 'URL del avatar del usuario' },
               preferences: { type: 'object' },
               visitedCountries: { type: 'array', items: { type: 'string' } },
               followersCount: { type: 'number' },
@@ -525,9 +529,34 @@ async function userRoutes(fastify, options) {
   }, async (request, reply) => {
     try {
       const userId = request.user.id;
-      const userData = request.body;
+      const data = request.body;
+      let avatarUrl = null;
 
-      const updatedUser = await userService.updateUserProfile(userId, userData);
+      // Si se subió un archivo de avatar
+      if (request.isMultipart()) {
+        const file = await request.file();
+        const buffer = await file.toBuffer();
+        const filename = `${userId}-${Date.now()}.${file.filename.split('.').pop()}`;
+
+        // Subir el archivo a Supabase Storage
+        const { data: uploadData, error: uploadError } = await fastify.supabase.storage
+          .from('avatars')
+          .upload(filename, buffer, {
+            contentType: file.mimetype,
+            upsert: true
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Obtener la URL pública del archivo
+        const { data: { publicUrl } } = fastify.supabase.storage
+          .from('avatars')
+          .getPublicUrl(filename);
+
+        avatarUrl = publicUrl;
+      }
+
+      const updatedUser = await userService.updateUserProfile(userId, { ...data, avatar_url: avatarUrl });
 
       return {
         success: true,

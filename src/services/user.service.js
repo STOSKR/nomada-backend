@@ -24,11 +24,12 @@ class UserService {
   async getUserProfile(userId, currentUserId = null) {
     const { data, error } = await this.supabase
       .from('users')
-      .select('id, nomada_id, username, email, bio, preferences, visited_countries, followers_cou, following_cou')
+      .select('id, nomada_id, username, email, bio, avatar_url, preferences, visited_countries, followers_count, following_count')
       .eq('id', userId)
       .single();
 
     if (error) {
+      console.error('Error al obtener perfil:', error);
       throw new Error('Error al obtener perfil del usuario');
     }
 
@@ -87,6 +88,7 @@ class UserService {
       username: data.username,
       email: data.email,
       bio: data.bio,
+      avatar_url: data.avatar_url,
       preferences: data.preferences,
       visitedCountries: data.visited_countries,
       followersCount: data.followers_count,
@@ -302,13 +304,15 @@ class UserService {
    * @returns {Promise<Object>} - Perfil del usuario
    */
   async getUserByUsername(identifier, currentUserId) {
+    // Buscar usuario por nomada_id o username
     const { data, error } = await this.supabase
       .from('users')
-      .select('id, nomada_id, username, email, bio, preferences, visited_countries, followers_count, following_count')
-      .or(`username.eq.${identifier},nomada_id.eq.${identifier}`)
+      .select('id, nomada_id, username, email, bio, avatar_url, preferences, visited_countries, followers_count, following_count')
+      .or(`nomada_id.eq.${identifier},username.eq.${identifier}`)
       .single();
 
     if (error) {
+      console.error('Error al buscar usuario por nombre:', error);
       throw new Error('Error al obtener perfil del usuario');
     }
 
@@ -367,6 +371,7 @@ class UserService {
       username: data.username,
       email: data.email,
       bio: data.bio,
+      avatar_url: data.avatar_url,
       preferences: data.preferences,
       visitedCountries: data.visited_countries,
       followersCount: data.followers_count,

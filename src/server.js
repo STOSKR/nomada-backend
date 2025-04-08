@@ -44,11 +44,20 @@ const cors = require('@fastify/cors');
 const jwt = require('@fastify/jwt');
 const swagger = require('@fastify/swagger');
 const swaggerUI = require('@fastify/swagger-ui');
+const multipart = require('fastify-multipart');
 
 // Registro de plugins
 async function registerPlugins() {
   // Conexión a Supabase
   await fastify.register(supabasePlugin);
+
+  // Multipart para subida de archivos
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB
+      files: 1
+    }
+  });
 
   // CORS
   await fastify.register(cors, {

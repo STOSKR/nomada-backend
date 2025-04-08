@@ -15,6 +15,7 @@ const schemas = {
     signup: {
         description: 'Registrar un nuevo usuario',
         tags: ['autenticación'],
+        consumes: ['multipart/form-data'],
         body: {
             type: 'object',
             required: ['email', 'password', 'nomada_id'],
@@ -23,7 +24,8 @@ const schemas = {
                 password: { type: 'string', minLength: 8, description: 'Contraseña (requerido, mínimo 8 caracteres)' },
                 nomada_id: { type: 'string', minLength: 3, description: 'Identificador único de usuario (requerido, mínimo 3 caracteres)' },
                 username: { type: 'string', description: 'Nombre visible del usuario' },
-                bio: { type: 'string', description: 'Biografía del usuario' }
+                bio: { type: 'string', description: 'Biografía del usuario' },
+                avatar: { type: 'string', format: 'binary', description: 'Archivo de imagen para el avatar del usuario' }
             }
         },
         response: {
@@ -38,7 +40,8 @@ const schemas = {
                             id: { type: 'string' },
                             nomada_id: { type: 'string' },
                             username: { type: 'string' },
-                            email: { type: 'string' }
+                            email: { type: 'string' },
+                            avatar_url: { type: 'string', description: 'URL del avatar del usuario' }
                         }
                     },
                     token: { type: 'string' }
@@ -72,6 +75,7 @@ const schemas = {
                             username: { type: 'string' },
                             email: { type: 'string' },
                             bio: { type: 'string' },
+                            avatar_url: { type: 'string', description: 'URL del avatar del usuario' },
                             preferences: {
                                 type: 'object',
                                 properties: {
@@ -129,7 +133,8 @@ const schemas = {
                             id: { type: 'string' },
                             nomada_id: { type: 'string' },
                             username: { type: 'string' },
-                            email: { type: 'string' }
+                            email: { type: 'string' },
+                            avatar_url: { type: 'string', description: 'URL del avatar del usuario' }
                         }
                     }
                 }
@@ -171,7 +176,34 @@ async function authRoutes(fastify, options) {
     // Ruta para registro de nuevo usuario
     fastify.post('/signup', { schema: schemas.signup }, async (request, reply) => {
         try {
-            const result = await authService.signup(request.body);
+            const data = request.body;
+            let avatarUrl = null;
+
+            // Si se subió un archivo de avatar
+            if (request.isMultipart()) {
+                const file = await request.file();
+                const buffer = await file.toBuffer();
+                const filename = `${data.nomada_id}-${Date.now()}.${file.filename.split('.').pop()}`;
+
+                // Subir el archivo a Supabase Storage
+                const { data: uploadData, error: uploadError } = await fastify.supabase.storage
+                    .from('avatars')
+                    .upload(filename, buffer, {
+                        contentType: file.mimetype,
+                        upsert: true
+                    });
+
+                if (uploadError) throw uploadError;
+
+                // Obtener la URL pública del archivo
+                const { data: { publicUrl } } = fastify.supabase.storage
+                    .from('avatars')
+                    .getPublicUrl(filename);
+
+                avatarUrl = publicUrl;
+            }
+
+            const result = await authService.signup({ ...data, avatar_url: avatarUrl });
 
             // Generar token JWT
             const token = fastify.jwt.sign({
