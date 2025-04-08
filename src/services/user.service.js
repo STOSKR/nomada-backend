@@ -24,7 +24,7 @@ class UserService {
   async getUserProfile(userId, currentUserId = null) {
     const { data, error } = await this.supabase
       .from('users')
-      .select('id, nomada_id, username, email, bio, preferences, visited_countries, followers_count, following_count')
+      .select('id, nomada_id, username, email, bio, preferences, visited_countries, followers_cou, following_cou')
       .eq('id', userId)
       .single();
 
@@ -44,6 +44,26 @@ class UserService {
 
     if (routesError) {
       console.error('Error al contar rutas del usuario:', routesError);
+    }
+
+    // Obtener las rutas públicas del usuario
+    const { data: userRoutes, error: userRoutesError } = await this.supabase
+      .from('routes')
+      .select(`
+        id,
+        title,
+        description,
+        country,
+        is_public,
+        likes_count,
+        created_at
+      `)
+      .eq('user_id', userId)
+      .eq('is_public', true)
+      .order('created_at', { ascending: false });
+
+    if (userRoutesError) {
+      console.error('Error al obtener rutas del usuario:', userRoutesError);
     }
 
     // Verificar si el usuario actual sigue a este perfil
@@ -72,7 +92,8 @@ class UserService {
       followersCount: data.followers_count,
       followingCount: data.following_count,
       routesCount: routesCount || 0,
-      isFollowing
+      isFollowing,
+      routes: userRoutes || []
     };
   }
 
@@ -212,6 +233,148 @@ class UserService {
       username: user.username,
       fullName: user.full_name
     }));
+  }
+
+  /**
+   * Actualizar perfil del usuario
+   * @param {string} userId - ID del usuario
+   * @param {Object} userData - Datos a actualizar del usuario
+   * @returns {Promise<Object>} - Perfil actualizado
+   */
+  async updateUserProfile(userId, userData) {
+    // Verificar si existe el usuario
+    const { data: existingUser, error: checkError } = await this.supabase
+      .from('users')
+      .select('id, nomada_id')
+      .eq('id', userId)
+      .single();
+
+    if (checkError || !existingUser) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    // Si se intenta actualizar el nomada_id, verificar que no exista ya
+    if (userData.nomada_id && userData.nomada_id !== existingUser.nomada_id) {
+      const { data: existingNomadaId, error: nomadaIdError } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('nomada_id', userData.nomada_id)
+        .maybeSingle();
+
+      if (existingNomadaId) {
+        throw new Error('El identificador de nómada ya está en uso');
+      }
+    }
+
+    // Preparar datos a actualizar (solo los campos permitidos)
+    const updatableFields = ['username', 'nomada_id', 'bio'];
+    const dataToUpdate = {};
+
+    for (const field of updatableFields) {
+      if (userData[field] !== undefined) {
+        dataToUpdate[field] = userData[field];
+      }
+    }
+
+    // Si no hay nada que actualizar, devolver error
+    if (Object.keys(dataToUpdate).length === 0) {
+      throw new Error('No se proporcionaron datos válidos para actualizar');
+    }
+
+    // Actualizar perfil en la base de datos
+    const { error: updateError } = await this.supabase
+      .from('users')
+      .update(dataToUpdate)
+      .eq('id', userId);
+
+    if (updateError) {
+      throw new Error(`Error al actualizar perfil: ${updateError.message}`);
+    }
+
+    // Obtener perfil actualizado
+    return this.getUserProfile(userId, userId);
+  }
+
+  /**
+   * Buscar usuario por username o nomada_id
+   * @param {string} identifier - Username o nomada_id del usuario
+   * @param {string} currentUserId - ID del usuario que hace la solicitud
+   * @returns {Promise<Object>} - Perfil del usuario
+   */
+  async getUserByUsername(identifier, currentUserId) {
+    const { data, error } = await this.supabase
+      .from('users')
+      .select('id, nomada_id, username, email, bio, preferences, visited_countries, followers_count, following_count')
+      .or(`username.eq.${identifier},nomada_id.eq.${identifier}`)
+      .single();
+
+    if (error) {
+      throw new Error('Error al obtener perfil del usuario');
+    }
+
+    if (!data) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    // Contar el número de rutas creadas por el usuario
+    const { count: routesCount, error: routesError } = await this.supabase
+      .from('routes')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', data.id);
+
+    if (routesError) {
+      console.error('Error al contar rutas del usuario:', routesError);
+    }
+
+    // Obtener las rutas públicas del usuario
+    const { data: userRoutes, error: userRoutesError } = await this.supabase
+      .from('routes')
+      .select(`
+        id,
+        title,
+        description,
+        country,
+        is_public,
+        likes_count,
+        created_at
+      `)
+      .eq('user_id', data.id)
+      .eq('is_public', true)
+      .order('created_at', { ascending: false });
+
+    if (userRoutesError) {
+      console.error('Error al obtener rutas del usuario:', userRoutesError);
+    }
+
+    // Verificar si el usuario actual sigue a este perfil
+    let isFollowing = null;
+    if (currentUserId && currentUserId !== data.id) {
+      const { data: followData, error: followError } = await this.supabase
+        .from('user_follows')
+        .select('id')
+        .eq('follower_id', currentUserId)
+        .eq('following_id', data.id)
+        .maybeSingle();
+
+      if (!followError) {
+        isFollowing = !!followData;
+      }
+    }
+
+    return {
+      id: data.id,
+      nomada_id: data.nomada_id,
+      username: data.username,
+      email: data.email,
+      bio: data.bio,
+      preferences: data.preferences,
+      visitedCountries: data.visited_countries,
+      followersCount: data.followers_count,
+      followingCount: data.following_count,
+      routesCount: routesCount || 0,
+      isFollowing,
+      routes: userRoutes || []
+    };
   }
 }
 

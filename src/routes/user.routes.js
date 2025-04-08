@@ -41,6 +41,44 @@ const schemas = {
     }
   },
 
+  updateProfile: {
+    description: 'Actualizar perfil del usuario',
+    tags: ['usuarios'],
+    security: [{ apiKey: [] }],
+    body: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', description: 'Nombre visible del usuario' },
+        nomada_id: { type: 'string', minLength: 3, description: 'ID único del nómada (debe ser único)' },
+        bio: { type: 'string', description: 'Biografía del usuario' }
+      }
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          message: { type: 'string' },
+          user: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              nomada_id: { type: 'string' },
+              username: { type: 'string' },
+              email: { type: 'string' },
+              bio: { type: 'string' },
+              preferences: { type: 'object' },
+              visitedCountries: { type: 'array', items: { type: 'string' } },
+              followersCount: { type: 'number' },
+              followingCount: { type: 'number' },
+              routesCount: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+  },
+
   updatePreferences: {
     description: 'Actualizar preferencias de viaje del usuario',
     tags: ['usuarios'],
@@ -310,9 +348,27 @@ async function userRoutes(fastify, options) {
       const currentUserId = request.user.id;
 
       // Si el ID es "me", devuelve el perfil del usuario actual
-      const userId = (requestedId === "me") ? currentUserId : requestedId;
+      if (requestedId === "me") {
+        const result = await userService.getUserProfile(currentUserId, currentUserId);
+        return {
+          success: true,
+          user: result
+        };
+      }
 
-      const result = await userService.getUserProfile(userId, currentUserId);
+      // Verificar si es un UUID válido
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const isUuid = uuidRegex.test(requestedId);
+
+      let result;
+
+      if (isUuid) {
+        // Si es un UUID, buscar por ID
+        result = await userService.getUserProfile(requestedId, currentUserId);
+      } else {
+        // Si no es un UUID, buscar por username o nomada_id
+        result = await userService.getUserByUsername(requestedId, currentUserId);
+      }
 
       return {
         success: true,
@@ -456,6 +512,39 @@ async function userRoutes(fastify, options) {
     } catch (error) {
       request.log.error(error);
       return reply.code(500).send({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
+  // Actualizar perfil de usuario
+  fastify.put('/profile', {
+    schema: schemas.updateProfile,
+    preValidation: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      const userId = request.user.id;
+      const userData = request.body;
+
+      const updatedUser = await userService.updateUserProfile(userId, userData);
+
+      return {
+        success: true,
+        message: 'Perfil actualizado correctamente',
+        user: updatedUser
+      };
+    } catch (error) {
+      request.log.error(error);
+
+      if (error.message.includes('ya está en uso')) {
+        return reply.code(409).send({
+          success: false,
+          message: error.message
+        });
+      }
+
+      return reply.code(400).send({
         success: false,
         message: error.message
       });
