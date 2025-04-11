@@ -769,36 +769,90 @@ async function routeRoutes(fastify, options) {
     try {
       const { places, startPoint, hotel, days = 1, maxHoursPerDay = 8 } = request.body;
 
-      if (!places || places.length < 2) {
+      // Validaciones más estrictas de los datos de entrada
+      if (!places || !Array.isArray(places) || places.length < 2) {
         return reply.code(400).send({
           success: false,
-          message: 'Se requieren al menos 2 lugares para optimizar una ruta'
+          message: 'Se requieren al menos 2 lugares válidos para optimizar una ruta'
         });
       }
 
-      // Calcular distancias entre todos los puntos
-      const distances = calculateDistanceMatrix(places, startPoint, hotel);
+      // Verificar que los lugares tienen coordenadas válidas
+      const placesWithCoordinates = places.filter(place => {
+        return place && place.coordinates &&
+          typeof place.coordinates === 'object' &&
+          typeof place.coordinates.lat === 'number' &&
+          typeof place.coordinates.lng === 'number';
+      });
 
-      // Aplicar algoritmo del vecino más cercano para encontrar la ruta óptima
-      let optimizedRoute;
-
-      if (days > 1) {
-        // Si se especifican días, usar la versión del algoritmo con distribución por días
-        optimizedRoute = findOptimalRouteWithDays(places, distances, startPoint, hotel, days, maxHoursPerDay);
-      } else {
-        // Usar el algoritmo original para un solo día
-        optimizedRoute = findOptimalRoute(places, distances, startPoint, hotel);
+      if (placesWithCoordinates.length < 2) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Se requieren al menos 2 lugares con coordenadas válidas'
+        });
       }
 
-      return {
-        success: true,
-        optimizedRoute
-      };
+      // Log para depuración con más detalles sobre los datos recibidos
+      console.log('Optimizando ruta:');
+      console.log(`- ${placesWithCoordinates.length} lugares válidos`);
+      console.log(`- ${days} días`);
+      console.log(`- Punto de inicio: ${startPoint ? 'Sí' : 'No'}`);
+      console.log(`- Hotel: ${hotel ? hotel.name || 'Sin nombre' : 'No'}`);
+
+      try {
+        // Calcular distancias entre todos los puntos
+        const distances = calculateDistanceMatrix(placesWithCoordinates, startPoint, hotel);
+        console.log('Matriz de distancias calculada correctamente');
+
+        // Aplicar algoritmo del vecino más cercano para encontrar la ruta óptima
+        let optimizedRoute;
+
+        if (days > 1) {
+          console.log('Usando optimización para múltiples días');
+          // Si se especifican días, usar la versión del algoritmo con distribución por días
+          optimizedRoute = findOptimalRouteWithDays(placesWithCoordinates, distances, startPoint, hotel, days, maxHoursPerDay);
+        } else {
+          console.log('Usando optimización para un solo día');
+          // Usar el algoritmo original para un solo día
+          optimizedRoute = findOptimalRoute(placesWithCoordinates, distances, startPoint, hotel);
+        }
+
+        // Verificar que la ruta optimizada existe y tiene elementos
+        if (!optimizedRoute || !Array.isArray(optimizedRoute) || optimizedRoute.length === 0) {
+          console.error('No se pudo generar una ruta optimizada');
+          return reply.code(500).send({
+            success: false,
+            message: 'Error al optimizar la ruta: no se pudo generar una ruta optimizada'
+          });
+        }
+
+        console.log(`Ruta optimizada generada con ${optimizedRoute.length} lugares`);
+        return {
+          success: true,
+          optimizedRoute
+        };
+      } catch (error) {
+        console.error('Error durante el proceso de optimización:', error);
+
+        // Si hay un error durante la optimización, responder con un array ordenado simple
+        const simpleOptimizedRoute = placesWithCoordinates.map((place, index) => ({
+          ...place,
+          order_index: index,
+          day: Math.min(Math.floor(index / Math.ceil(placesWithCoordinates.length / days)) + 1, days)
+        }));
+
+        console.log('Devolviendo una ruta simple sin optimizar debido al error');
+        return {
+          success: true,
+          optimizedRoute: simpleOptimizedRoute,
+          warning: 'No se pudo optimizar completamente la ruta debido a un error interno'
+        };
+      }
     } catch (error) {
-      request.log.error(error);
+      console.error('Error general en endpoint de optimización:', error);
       return reply.code(500).send({
         success: false,
-        message: error.message
+        message: error.message || 'Error interno del servidor'
       });
     }
   });
@@ -834,8 +888,45 @@ async function routeRoutes(fastify, options) {
  * @returns {Array} Matriz de distancias
  */
 function calculateDistanceMatrix(places, startPoint = null, hotel = null) {
+  console.log(`Calculando matriz de distancias para ${places.length} lugares`);
+
+  // Verificar que todos los lugares tengan coordenadas válidas
+  const validPlaces = places.filter(place => {
+    if (!place.coordinates || typeof place.coordinates !== 'object') {
+      console.error(`Lugar sin coordenadas válidas:`, place);
+      return false;
+    }
+    if (typeof place.coordinates.lat !== 'number' || typeof place.coordinates.lng !== 'number') {
+      console.error(`Coordenadas inválidas en lugar:`, place.coordinates);
+      return false;
+    }
+    return true;
+  });
+
+  console.log(`Lugares válidos con coordenadas: ${validPlaces.length} de ${places.length}`);
+
+  // Si no hay lugares válidos, retornar una matriz vacía
+  if (validPlaces.length === 0) {
+    console.error("No hay lugares con coordenadas válidas para calcular distancias");
+    return [[]];
+  }
+
   // Si hay hotel, lo usamos como punto de inicio en lugar del startPoint
-  const actualStartPoint = hotel ? hotel.coordinates : startPoint;
+  let actualStartPoint = null;
+
+  if (hotel && hotel.coordinates &&
+    typeof hotel.coordinates === 'object' &&
+    typeof hotel.coordinates.lat === 'number' &&
+    typeof hotel.coordinates.lng === 'number') {
+    actualStartPoint = hotel.coordinates;
+    console.log(`Usando hotel como punto de inicio: ${actualStartPoint.lat}, ${actualStartPoint.lng}`);
+  } else if (startPoint &&
+    typeof startPoint === 'object' &&
+    typeof startPoint.lat === 'number' &&
+    typeof startPoint.lng === 'number') {
+    actualStartPoint = startPoint;
+    console.log(`Usando startPoint como punto de inicio: ${actualStartPoint.lat}, ${actualStartPoint.lng}`);
+  }
 
   // Crear la lista completa de puntos
   const points = [];
@@ -845,10 +936,12 @@ function calculateDistanceMatrix(places, startPoint = null, hotel = null) {
     points.push(actualStartPoint);
   }
 
-  // Añadir todos los lugares
-  places.forEach(place => {
+  // Añadir todos los lugares válidos
+  validPlaces.forEach(place => {
     points.push(place.coordinates);
   });
+
+  console.log(`Total de puntos para matriz de distancias: ${points.length}`);
 
   // Calcular la matriz de distancias
   const n = points.length;
@@ -857,11 +950,17 @@ function calculateDistanceMatrix(places, startPoint = null, hotel = null) {
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       if (i !== j) {
-        distances[i][j] = calculateDistance(points[i], points[j]);
+        try {
+          distances[i][j] = calculateDistance(points[i], points[j]);
+        } catch (error) {
+          console.error(`Error al calcular distancia entre puntos ${i} y ${j}:`, error);
+          distances[i][j] = 999999; // Valor alto para evitar esta ruta
+        }
       }
     }
   }
 
+  console.log(`Matriz de distancias calculada: ${n}x${n}`);
   return distances;
 }
 
@@ -872,13 +971,33 @@ function calculateDistanceMatrix(places, startPoint = null, hotel = null) {
  * @returns {number} Distancia en kilómetros
  */
 function calculateDistance(point1, point2) {
+  // Verificar que los puntos son válidos
+  if (!point1 || !point2 ||
+    typeof point1.lat !== 'number' || typeof point1.lng !== 'number' ||
+    typeof point2.lat !== 'number' || typeof point2.lng !== 'number') {
+    console.error('Puntos inválidos para cálculo de distancia:', { point1, point2 });
+    return 999999; // Valor alto para puntos inválidos
+  }
+
+  // Convertir coordenadas a números por seguridad
+  const lat1 = Number(point1.lat);
+  const lng1 = Number(point1.lng);
+  const lat2 = Number(point2.lat);
+  const lng2 = Number(point2.lng);
+
+  // Verificar que las coordenadas son números válidos
+  if (isNaN(lat1) || isNaN(lng1) || isNaN(lat2) || isNaN(lng2)) {
+    console.error('Coordenadas no numéricas:', { lat1, lng1, lat2, lng2 });
+    return 999999;
+  }
+
   const R = 6371; // Radio de la Tierra en km
-  const dLat = toRad(point2.lat - point1.lat);
-  const dLng = toRad(point2.lng - point1.lng);
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
 
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(point1.lat)) * Math.cos(toRad(point2.lat)) *
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -891,6 +1010,11 @@ function calculateDistance(point1, point2) {
  * @returns {number} Valor en radianes
  */
 function toRad(value) {
+  // Verificar que el valor es un número
+  if (typeof value !== 'number' || isNaN(value)) {
+    console.error(`Valor no numérico en conversión a radianes: ${value}`);
+    return 0;
+  }
   return value * Math.PI / 180;
 }
 
@@ -1152,7 +1276,7 @@ function getDayOfWeek(dayOffset = 0) {
 }
 
 /**
- * Encuentra la ruta óptima usando una combinación de vecino más cercano y optimización 2-opt
+ * Encuentra la ruta óptima usando una versión simplificada del algoritmo del vecino más cercano
  * @param {Array} places - Array de lugares
  * @param {Array} distances - Matriz de distancias
  * @param {Object} startPoint - Punto de inicio opcional
@@ -1160,416 +1284,95 @@ function getDayOfWeek(dayOffset = 0) {
  * @returns {Array} Ruta optimizada con índices de orden
  */
 function findOptimalRoute(places, distances, startPoint = null, hotel = null) {
-  // Usar hotel como punto de inicio si está definido
+  // Verificar que tenemos lugares para optimizar
+  if (!places || places.length === 0) {
+    console.error("No hay lugares para optimizar");
+    return [];
+  }
+
+  console.log(`Optimizando ruta con ${places.length} lugares`);
+
+  // Determinar si hay punto de inicio (hotel o startPoint)
   const hasStartingPoint = startPoint || hotel;
+  const offset = hasStartingPoint ? 1 : 0; // Índice de inicio en la matriz de distancias
 
-  // Agrupar lugares por proximidad geográfica antes de optimizar
-  const clusters = groupPlacesByProximity(places);
+  try {
+    // Implementación simplificada: Algoritmo del vecino más cercano
+    const n = places.length;
+    const visited = Array(n).fill(false);
+    const route = [];
 
-  // Índice de inicio (0 si hay punto de inicio, cualquier punto si no hay)
-  const offset = hasStartingPoint ? 1 : 0;
+    // Comenzar desde el primer lugar (o el más cercano al punto de inicio)
+    let currentIdx = 0;
 
-  // Array de índices para la ruta final
-  let route = [];
-
-  // Ordenar clusters por distancia al punto de inicio o al primer cluster
-  const orderedClusters = orderClustersByProximity(clusters, distances, hasStartingPoint ? 0 : null);
-
-  // Construir la ruta respetando los clusters (grupos de proximidad)
-  for (const cluster of orderedClusters) {
-    // Optimizar internamente cada cluster
-    const clusterRoute = optimizeCluster(cluster, distances, route.length > 0 ? route[route.length - 1] : (hasStartingPoint ? 0 : null), offset);
-
-    // Añadir la ruta optimizada del cluster a la ruta global
-    route = [...route, ...clusterRoute];
-  }
-
-  // Aplicar optimización 2-opt a toda la ruta para mejorar globalmente
-  route = twoOptOptimization(route, distances, offset);
-
-  // Construir la ruta final con todos los datos de los lugares
-  const optimizedRoute = route.map((placeIndex, index) => ({
-    ...places[placeIndex],
-    order_index: index
-  }));
-
-  return optimizedRoute;
-}
-
-/**
- * Agrupa lugares por proximidad geográfica
- * @param {Array} places - Array de lugares
- * @returns {Array} Array de clusters (grupos de índices de lugares)
- */
-function groupPlacesByProximity(places) {
-  // Si hay pocos lugares, no hace falta clusterizar
-  if (places.length <= 4) {
-    return [places.map((_, i) => i)];
-  }
-
-  // Calcular matriz de distancias entre todos los lugares
-  const n = places.length;
-  const distMatrix = Array(n).fill().map(() => Array(n).fill(0));
-
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const dist = calculateDistance(places[i].coordinates, places[j].coordinates);
-      distMatrix[i][j] = dist;
-      distMatrix[j][i] = dist;
-    }
-  }
-
-  // Umbral de distancia para considerar lugares como "cercanos"
-  // Usamos un percentil bajo de todas las distancias para determinar automáticamente
-  let allDistances = [];
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      allDistances.push(distMatrix[i][j]);
-    }
-  }
-  allDistances.sort((a, b) => a - b);
-
-  // Usar el percentil 25 como umbral de proximidad
-  const proximityThreshold = allDistances[Math.floor(allDistances.length * 0.25)];
-
-  // Implementación simplificada de DBSCAN para clustering
-  const visited = Array(n).fill(false);
-  const clusters = [];
-
-  for (let i = 0; i < n; i++) {
-    if (visited[i]) continue;
-
-    visited[i] = true;
-    const cluster = [i];
-    const neighbors = [];
-
-    for (let j = 0; j < n; j++) {
-      if (i !== j && distMatrix[i][j] <= proximityThreshold) {
-        neighbors.push(j);
-      }
-    }
-
-    while (neighbors.length > 0) {
-      const current = neighbors.pop();
-      if (visited[current]) continue;
-
-      visited[current] = true;
-      cluster.push(current);
-
-      for (let j = 0; j < n; j++) {
-        if (!visited[j] && distMatrix[current][j] <= proximityThreshold) {
-          neighbors.push(j);
-        }
-      }
-    }
-
-    // Añadir cluster solo si tiene al menos un elemento
-    if (cluster.length > 0) {
-      clusters.push(cluster);
-    }
-  }
-
-  // Asignar lugares no agrupados al cluster más cercano
-  for (let i = 0; i < n; i++) {
-    let assigned = false;
-    for (const cluster of clusters) {
-      if (cluster.includes(i)) {
-        assigned = true;
-        break;
-      }
-    }
-
-    if (!assigned) {
-      let minDistance = Infinity;
-      let closestCluster = 0;
-
-      for (let c = 0; c < clusters.length; c++) {
-        const cluster = clusters[c];
-        for (const placeIdx of cluster) {
-          if (distMatrix[i][placeIdx] < minDistance) {
-            minDistance = distMatrix[i][placeIdx];
-            closestCluster = c;
-          }
-        }
-      }
-
-      clusters[closestCluster].push(i);
-    }
-  }
-
-  // Asegurar que cada lugar está asignado a exactamente un cluster
-  const allAssigned = new Set();
-  for (const cluster of clusters) {
-    for (const idx of cluster) {
-      allAssigned.add(idx);
-    }
-  }
-
-  // Si no se han asignado todos los lugares, crear un cluster con los faltantes
-  if (allAssigned.size < n) {
-    const missing = [];
-    for (let i = 0; i < n; i++) {
-      if (!allAssigned.has(i)) {
-        missing.push(i);
-      }
-    }
-    if (missing.length > 0) {
-      clusters.push(missing);
-    }
-  }
-
-  return clusters;
-}
-
-/**
- * Ordena clusters por proximidad
- * @param {Array} clusters - Array de clusters (grupos de índices)
- * @param {Array} distances - Matriz de distancias completa
- * @param {number|null} startIdx - Índice del punto de inicio, o null
- * @returns {Array} Clusters ordenados por proximidad
- */
-function orderClustersByProximity(clusters, distances, startIdx) {
-  if (clusters.length <= 1) return clusters;
-
-  // Calcular "centroide" (promedio) de cada cluster
-  const centroids = clusters.map(cluster => {
-    const sum = cluster.reduce((acc, idx) => acc + idx, 0);
-    return sum / cluster.length;
-  });
-
-  // Orden de los clusters
-  const orderedClusters = [];
-  const visited = Array(clusters.length).fill(false);
-
-  // Índice del primer cluster (el más cercano al punto inicial si existe)
-  let currentIdx;
-
-  if (startIdx !== null) {
-    // Comenzar con el cluster más cercano al punto inicial
-    let minDist = Infinity;
-    for (let i = 0; i < clusters.length; i++) {
-      const cluster = clusters[i];
-      for (const placeIdx of cluster) {
-        const dist = distances[startIdx][placeIdx];
+    // Si hay punto de inicio, encontrar el lugar más cercano a él
+    if (hasStartingPoint) {
+      let minDist = Infinity;
+      for (let i = 0; i < n; i++) {
+        // La distancia desde el punto de inicio (índice 0 en la matriz) al lugar i+offset
+        const dist = distances[0][i + offset];
         if (dist < minDist) {
           minDist = dist;
           currentIdx = i;
         }
       }
     }
-  } else {
-    // Comenzar con cualquier cluster
-    currentIdx = 0;
-  }
 
-  // Añadir el primer cluster
-  visited[currentIdx] = true;
-  orderedClusters.push(clusters[currentIdx]);
+    // Añadir el primer lugar a la ruta
+    visited[currentIdx] = true;
+    route.push(currentIdx);
 
-  // Ordenar el resto de clusters por proximidad
-  while (orderedClusters.length < clusters.length) {
-    let nextIdx = -1;
-    let minDist = Infinity;
+    // Construir el resto de la ruta
+    while (route.length < n) {
+      let nextIdx = -1;
+      let minDist = Infinity;
 
-    // Último cluster añadido
-    const lastCluster = orderedClusters[orderedClusters.length - 1];
-
-    for (let i = 0; i < clusters.length; i++) {
-      if (!visited[i]) {
-        // Calcular distancia mínima entre cualquier lugar del último cluster y este
-        for (const lastIdx of lastCluster) {
-          for (const placeIdx of clusters[i]) {
-            const dist = distances[lastIdx][placeIdx];
-            if (dist < minDist) {
-              minDist = dist;
-              nextIdx = i;
-            }
-          }
-        }
-      }
-    }
-
-    if (nextIdx !== -1) {
-      visited[nextIdx] = true;
-      orderedClusters.push(clusters[nextIdx]);
-    } else {
-      // Si no se encuentra siguiente cluster, añadir cualquiera no visitado
-      for (let i = 0; i < clusters.length; i++) {
+      // Encontrar el vecino más cercano no visitado
+      for (let i = 0; i < n; i++) {
         if (!visited[i]) {
-          visited[i] = true;
-          orderedClusters.push(clusters[i]);
-          break;
-        }
-      }
-    }
-  }
+          // Ajustar índices para la matriz de distancias
+          const fromIdx = route[route.length - 1] + offset;
+          const toIdx = i + offset;
 
-  return orderedClusters;
-}
-
-/**
- * Optimiza la ruta dentro de un cluster
- * @param {Array} cluster - Array de índices de lugares en el cluster
- * @param {Array} distances - Matriz de distancias
- * @param {number|null} prevIdx - Índice del lugar previo, o null
- * @param {number} offset - Offset para ajustar índices
- * @returns {Array} Ruta optimizada dentro del cluster
- */
-function optimizeCluster(cluster, distances, prevIdx, offset) {
-  if (cluster.length <= 1) return cluster;
-
-  // Usar algoritmo del vecino más cercano dentro del cluster
-  const visited = Array(cluster.length).fill(false);
-  const route = [];
-
-  // Determinar el punto de inicio dentro del cluster (el más cercano al punto anterior)
-  let startIdx = 0;
-  if (prevIdx !== null) {
-    let minDist = Infinity;
-    for (let i = 0; i < cluster.length; i++) {
-      const dist = distances[prevIdx][cluster[i]];
-      if (dist < minDist) {
-        minDist = dist;
-        startIdx = i;
-      }
-    }
-  }
-
-  // Comenzar con el punto inicial
-  let currentIdx = startIdx;
-  visited[currentIdx] = true;
-  route.push(cluster[currentIdx]);
-
-  // Completar la ruta con el vecino más cercano
-  while (route.length < cluster.length) {
-    let nextIdx = -1;
-    let minDist = Infinity;
-
-    for (let i = 0; i < cluster.length; i++) {
-      if (!visited[i]) {
-        const dist = distances[cluster[currentIdx]][cluster[i]];
-        if (dist < minDist) {
-          minDist = dist;
-          nextIdx = i;
-        }
-      }
-    }
-
-    if (nextIdx !== -1) {
-      visited[nextIdx] = true;
-      route.push(cluster[nextIdx]);
-      currentIdx = nextIdx;
-    } else {
-      break; // No debería ocurrir
-    }
-  }
-
-  // Optimizar con 2-opt dentro del cluster
-  if (route.length > 2) {
-    // Ajustar para usar indices reales, no los del cluster
-    const routeIndices = Array(route.length);
-    for (let i = 0; i < route.length; i++) {
-      routeIndices[i] = route[i];
-    }
-
-    // Aplicar 2-opt dentro del cluster
-    let improved = true;
-    let iterations = 0;
-    const maxIterations = 50;
-
-    while (improved && iterations < maxIterations) {
-      improved = false;
-      iterations++;
-
-      for (let i = 0; i < routeIndices.length - 2; i++) {
-        for (let j = i + 2; j < routeIndices.length; j++) {
-          const currDist = distances[routeIndices[i]][routeIndices[i + 1]] +
-            distances[routeIndices[j - 1]][routeIndices[j]];
-
-          const newDist = distances[routeIndices[i]][routeIndices[j - 1]] +
-            distances[routeIndices[i + 1]][routeIndices[j]];
-
-          if (newDist < currDist) {
-            // Invertir segmento
-            routeIndices.splice(i + 1, j - i - 1, ...routeIndices.slice(i + 1, j).reverse());
-            improved = true;
-            break;
+          const dist = distances[fromIdx][toIdx];
+          if (dist < minDist) {
+            minDist = dist;
+            nextIdx = i;
           }
         }
+      }
 
-        if (improved) break;
+      if (nextIdx !== -1) {
+        visited[nextIdx] = true;
+        route.push(nextIdx);
+      } else {
+        // No debería ocurrir, pero por seguridad
+        console.error("No se encontró siguiente lugar en la ruta");
+        break;
       }
     }
 
-    return routeIndices;
+    console.log(`Ruta generada con ${route.length} lugares`);
+
+    // Construir el resultado final con la información completa
+    const optimizedRoute = route.map((placeIndex, index) => {
+      return {
+        ...places[placeIndex],
+        order_index: index
+      };
+    });
+
+    return optimizedRoute;
+
+  } catch (error) {
+    console.error("Error en algoritmo de optimización:", error);
+
+    // En caso de error, devolver los lugares en su orden original
+    return places.map((place, index) => ({
+      ...place,
+      order_index: index
+    }));
   }
-
-  return route;
-}
-
-/**
- * Optimiza una ruta usando el algoritmo 2-opt
- * @param {Array} route - Array de índices que representa la ruta
- * @param {Array} distances - Matriz de distancias
- * @param {number} offset - Offset para ajustar índices si hay punto de inicio
- * @returns {Array} Ruta optimizada
- */
-function twoOptOptimization(route, distances, offset) {
-  let improved = true;
-  let bestDistance = calculateRouteDistance(route, distances, offset);
-  let iterations = 0;
-  const maxIterations = 100; // Evitar bucles infinitos
-
-  while (improved && iterations < maxIterations) {
-    improved = false;
-    iterations++;
-
-    for (let i = 0; i < route.length - 2; i++) {
-      for (let j = i + 2; j < route.length; j++) {
-        // No invertir si los extremos son el inicio y el final
-        if (i === 0 && j === route.length - 1) continue;
-
-        // Crear una nueva ruta invirtiendo el segmento entre i y j
-        const newRoute = [...route];
-        // Invertir segmento
-        const segment = newRoute.slice(i + 1, j + 1).reverse();
-        newRoute.splice(i + 1, j - i, ...segment);
-
-        // Calcular la distancia de la nueva ruta
-        const newDistance = calculateRouteDistance(newRoute, distances, offset);
-
-        // Si la nueva ruta es mejor, reemplazar la actual
-        if (newDistance < bestDistance) {
-          route = newRoute;
-          bestDistance = newDistance;
-          improved = true;
-          break; // Reiniciar el proceso con la nueva ruta
-        }
-      }
-      if (improved) break;
-    }
-  }
-
-  return route;
-}
-
-/**
- * Calcula la distancia total de una ruta
- * @param {Array} route - Array de índices que representa la ruta
- * @param {Array} distances - Matriz de distancias
- * @param {number} offset - Offset para ajustar índices si hay punto de inicio
- * @returns {number} Distancia total de la ruta
- */
-function calculateRouteDistance(route, distances, offset) {
-  let totalDistance = 0;
-
-  for (let i = 0; i < route.length - 1; i++) {
-    const from = route[i] + offset;
-    const to = route[i + 1] + offset;
-    totalDistance += distances[from][to];
-  }
-
-  return totalDistance;
 }
 
 /**
@@ -1583,599 +1386,80 @@ function calculateRouteDistance(route, distances, offset) {
  * @returns {Array} Ruta optimizada con índices de orden y asignación de días
  */
 function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = null, days = 1, maxHoursPerDay = 8) {
-  // Si solo hay un día, usa el algoritmo original
+  console.log(`Optimizando ruta con ${places.length} lugares para ${days} días`);
+
+  // Si solo hay un día o pocos lugares, usar el algoritmo básico
   if (days <= 1 || places.length <= days) {
+    console.log("Usando algoritmo básico por tener pocos lugares o un solo día");
     const optimizedRoute = findOptimalRoute(places, distances, startPoint, hotel);
 
-    // Asignar día 1 y calcular tiempos
-    const dayOfWeek = getDayOfWeek(0); // hoy
-    let currentTime = timeToMinutes('09:00');
-    let prevCoords = hotel ? hotel.coordinates : (startPoint || null);
-
-    return optimizedRoute.map(place => {
-      // Calcular tiempo de viaje
-      let travelTime = 0;
-      if (prevCoords) {
-        const distance = calculateDistance(prevCoords, place.coordinates);
-        travelTime = calculateTravelTime(distance) * 60;
-      }
-
-      // Ajustar por hora de apertura
-      let arrivalTime = currentTime + travelTime;
-      const availableTime = findFirstAvailableTime(place.openingHours, dayOfWeek, arrivalTime);
-
-      // Si no hay hora disponible, usar 09:00 del día siguiente
-      if (availableTime === null) {
-        arrivalTime = timeToMinutes('09:00');
-      } else {
-        arrivalTime = availableTime;
-      }
-
-      const departureTime = arrivalTime + ((place.visitDuration || 1) * 60);
-
-      // Actualizar para el siguiente lugar
-      currentTime = departureTime;
-      prevCoords = place.coordinates;
-
-      return {
-        ...place,
-        day: 1,
-        estimatedArrival: minutesToTime(arrivalTime),
-        estimatedDeparture: minutesToTime(departureTime)
-      };
-    });
-  }
-
-  // Información del hotel
-  const hotelCoordinates = hotel ? hotel.coordinates : null;
-
-  // 1. OPTIMIZAR GLOBALMENTE TODOS LOS LUGARES POR PROXIMIDAD
-  // Primero agrupamos lugares cercanos en clusters
-  const clusters = groupPlacesByProximity(places);
-
-  // Calculamos matriz de distancias entre lugares
-  const locationsDistances = [];
-  for (let i = 0; i < places.length; i++) {
-    locationsDistances[i] = [];
-    for (let j = 0; j < places.length; j++) {
-      locationsDistances[i][j] = calculateDistance(places[i].coordinates, places[j].coordinates);
-    }
-  }
-
-  // Ordenamos clusters por proximidad
-  const orderedClusters = orderClustersByProximity(clusters, distances, hotelCoordinates ? 0 : null);
-
-  // 2. CREAR UNA SECUENCIA INICIAL BASADA EN CLUSTERS
-  let initialSequence = [];
-
-  // Aplanar los clusters manteniendo juntos los lugares cercanos
-  for (const cluster of orderedClusters) {
-    // Optimizar el orden dentro de cada cluster
-    const optimizedCluster = optimizeClusterOrder(cluster, locationsDistances, places);
-    initialSequence = [...initialSequence, ...optimizedCluster];
-  }
-
-  // 3. AJUSTAR LA SECUENCIA PARA LUGARES ESENCIALES
-  // Mover lugares esenciales hacia el principio manteniendo la coherencia geográfica
-  const essentialPlaces = initialSequence.filter(idx => places[idx].isEssential);
-  const nonEssentialPlaces = initialSequence.filter(idx => !places[idx].isEssential);
-
-  // Si hay lugares esenciales, priorizarlos pero manteniendo su orden geográfico
-  if (essentialPlaces.length > 0) {
-    // Calcular cuántos lugares esenciales incluir cada día (distribución equitativa)
-    const essentialPerDay = Math.ceil(essentialPlaces.length / days);
-
-    // Redistribuir los lugares manteniendo esenciales al principio con coherencia geográfica
-    initialSequence = distributeEssentialPlaces(essentialPlaces, nonEssentialPlaces, essentialPerDay, locationsDistances);
-  }
-
-  // 4. DISTRIBUIR EN DÍAS RESPETANDO LA SECUENCIA DE PROXIMIDAD
-  const dayRoutes = [];
-  let currentDay = 1;
-  let currentDayMinutes = timeToMinutes('09:00');
-  let currentDayPlaces = [];
-  let dailyDuration = 0;
-
-  // Información para calcular tiempos
-  const dailyStartTime = timeToMinutes('09:00');
-  const maxDayMinutes = maxHoursPerDay * 60;
-  let previousCoords = hotelCoordinates || (startPoint ? startPoint : null);
-
-  // Posponer lugares si tienen problemas de horario o no caben en el día
-  const postponedPlaces = [];
-
-  // Distribuir los lugares en días respetando la secuencia optimizada
-  for (let i = 0; i < initialSequence.length; i++) {
-    const placeIndex = initialSequence[i];
-    const place = places[placeIndex];
-    const visitDuration = (place.visitDuration || 1) * 60;
-    const dayOfWeek = getDayOfWeek(currentDay - 1);
-
-    // Calcular tiempo de viaje desde punto anterior
-    let travelMinutes = 0;
-    if (previousCoords) {
-      const distance = calculateDistance(previousCoords, place.coordinates);
-      travelMinutes = calculateTravelTime(distance) * 60;
-    }
-
-    // Calcular tiempo estimado de llegada
-    let arrivalTime = currentDayMinutes + travelMinutes;
-
-    // Ajustar por horarios de apertura
-    const availableTime = findFirstAvailableTime(place.openingHours, dayOfWeek, arrivalTime);
-
-    // Si no hay hora disponible este día
-    if (availableTime === null) {
-      if (place.isEssential) {
-        // Si es esencial, pasar al siguiente día
-        if (currentDayPlaces.length > 0) {
-          // Reoptimizar el orden del día actual según proximidad
-          const reoptimizedDay = reoptimizeDayByProximity(currentDayPlaces, locationsDistances);
-          dayRoutes.push(reoptimizedDay);
-        }
-
-        // Configurar para nuevo día
-        currentDay++;
-        currentDayPlaces = [];
-        currentDayMinutes = dailyStartTime;
-        dailyDuration = 0;
-
-        // Comprobar horario en el nuevo día
-        const nextDayOfWeek = getDayOfWeek(currentDay - 1);
-        const newAvailableTime = findFirstAvailableTime(place.openingHours, nextDayOfWeek, dailyStartTime);
-
-        if (newAvailableTime !== null) {
-          // Si está disponible el nuevo día, añadirlo
-          arrivalTime = newAvailableTime;
-          const departureTime = arrivalTime + visitDuration;
-
-          currentDayPlaces.push({
-            ...place,
-            originalIndex: placeIndex,
-            day: currentDay,
-            order_index: 0,
-            estimatedArrival: minutesToTime(arrivalTime),
-            estimatedDeparture: minutesToTime(departureTime)
-          });
-
-          currentDayMinutes = departureTime;
-          dailyDuration += visitDuration + travelMinutes;
-          previousCoords = place.coordinates;
-        } else {
-          // Si sigue sin estar disponible, añadirlo con advertencia
-          place.visitWarning = `Lugar posiblemente cerrado`;
-          postponedPlaces.push(placeIndex);
-        }
-      } else {
-        // Si no es esencial, posponer
-        postponedPlaces.push(placeIndex);
-      }
-
-      continue;
-    }
-
-    // Actualizar tiempo con la primera hora disponible
-    arrivalTime = availableTime;
-    const departureTime = arrivalTime + visitDuration;
-
-    // Comprobar si este lugar cabe en el día actual
-    const additionalTime = visitDuration + travelMinutes;
-
-    if (place.isEssential || dailyDuration + additionalTime <= maxDayMinutes) {
-      // Añadir al día actual
-      currentDayPlaces.push({
-        ...place,
-        originalIndex: placeIndex,
-        day: currentDay,
-        order_index: currentDayPlaces.length,
-        estimatedArrival: minutesToTime(arrivalTime),
-        estimatedDeparture: minutesToTime(departureTime)
-      });
-
-      currentDayMinutes = departureTime;
-      dailyDuration += additionalTime;
-      previousCoords = place.coordinates;
-    } else {
-      // Reoptimizar el orden del día actual según proximidad
-      const reoptimizedDay = reoptimizeDayByProximity(currentDayPlaces, locationsDistances);
-      dayRoutes.push(reoptimizedDay);
-
-      // Configurar para nuevo día
-      currentDay++;
-      currentDayPlaces = [];
-      currentDayMinutes = dailyStartTime;
-      dailyDuration = 0;
-
-      if (hotelCoordinates) {
-        previousCoords = hotelCoordinates;
-        const distanceFromHotel = calculateDistance(hotelCoordinates, place.coordinates);
-        travelMinutes = calculateTravelTime(distanceFromHotel) * 60;
-      } else {
-        previousCoords = startPoint ? startPoint : null;
-        travelMinutes = 0;
-      }
-
-      // Comprobar disponibilidad en el nuevo día
-      const nextDayOfWeek = getDayOfWeek(currentDay - 1);
-      const newAvailableTime = findFirstAvailableTime(place.openingHours, nextDayOfWeek, dailyStartTime + travelMinutes);
-
-      if (newAvailableTime !== null) {
-        // Añadir al nuevo día
-        arrivalTime = newAvailableTime;
-        const newDepartureTime = arrivalTime + visitDuration;
-
-        currentDayPlaces.push({
-          ...place,
-          originalIndex: placeIndex,
-          day: currentDay,
-          order_index: 0,
-          estimatedArrival: minutesToTime(arrivalTime),
-          estimatedDeparture: minutesToTime(newDepartureTime)
-        });
-
-        currentDayMinutes = newDepartureTime;
-        dailyDuration += visitDuration + travelMinutes;
-        previousCoords = place.coordinates;
-      } else {
-        // Si no está disponible, posponer
-        postponedPlaces.push(placeIndex);
-      }
-    }
-  }
-
-  // Añadir el último día si tiene lugares
-  if (currentDayPlaces.length > 0) {
-    // Reoptimizar el orden del último día según proximidad
-    const reoptimizedDay = reoptimizeDayByProximity(currentDayPlaces, locationsDistances);
-    dayRoutes.push(reoptimizedDay);
-  }
-
-  // 5. REDISTRIBUIR LUGARES POSPUESTOS
-  if (postponedPlaces.length > 0) {
-    // Ordenar días por carga de trabajo
-    const dayLoads = dayRoutes.map((day, index) => ({
-      dayIndex: index,
-      load: day.reduce((sum, place) => sum + (place.visitDuration || 1), 0)
-    }));
-
-    dayLoads.sort((a, b) => a.load - b.load);
-
-    // Intentar añadir lugares pospuestos
-    for (const placeIndex of postponedPlaces) {
-      const place = places[placeIndex];
-
-      // Encontrar el día con menos carga que puede acomodar este lugar
-      for (const dayLoad of dayLoads) {
-        const dayIndex = dayLoad.dayIndex;
-        const day = dayRoutes[dayIndex];
-        const currentDayTotal = dayLoad.load;
-
-        // Si cabe en este día, añadirlo
-        if (currentDayTotal + (place.visitDuration || 1) <= maxHoursPerDay) {
-          // Encontrar la mejor posición dentro del día (cerca del lugar más cercano)
-          let bestPosition = 0;
-          let minDistance = Infinity;
-
-          for (let i = 0; i < day.length; i++) {
-            const existingPlace = day[i];
-            const distance = calculateDistance(place.coordinates, existingPlace.coordinates);
-
-            if (distance < minDistance) {
-              minDistance = distance;
-              bestPosition = i;
-            }
-          }
-
-          // Insertar en la posición óptima
-          const newPlace = {
-            ...place,
-            originalIndex: placeIndex,
-            day: dayIndex + 1,
-            estimatedArrival: "09:00", // Tiempo aproximado, se recalculará después
-            estimatedDeparture: "10:00"
-          };
-
-          // Insertar en la posición más cercana
-          day.splice(bestPosition + 1, 0, newPlace);
-
-          // Actualizar la carga del día
-          dayLoad.load += (place.visitDuration || 1);
-
-          // Reordenar la lista de cargas
-          dayLoads.sort((a, b) => a.load - b.load);
-
-          // Reoptimizar este día de nuevo
-          dayRoutes[dayIndex] = reoptimizeDayByProximity(day, locationsDistances);
-          break;
-        }
-      }
-    }
-  }
-
-  // 6. AJUSTAR A LA CANTIDAD DE DÍAS DISPONIBLES
-  if (dayRoutes.length > days) {
-    // Fusionar días hasta tener el número correcto
-    while (dayRoutes.length > days) {
-      // Encontrar los dos días consecutivos con lugares más cercanos entre sí
-      let minDistance = Infinity;
-      let daysToMerge = [0, 1];
-
-      for (let i = 0; i < dayRoutes.length - 1; i++) {
-        for (let j = i + 1; j < dayRoutes.length; j++) {
-          const day1 = dayRoutes[i];
-          const day2 = dayRoutes[j];
-
-          // Encontrar la distancia mínima entre cualquier par de lugares
-          for (const place1 of day1) {
-            for (const place2 of day2) {
-              const distance = calculateDistance(place1.coordinates, place2.coordinates);
-              if (distance < minDistance) {
-                minDistance = distance;
-                daysToMerge = [i, j];
-              }
-            }
-          }
-        }
-      }
-
-      // Fusionar los dos días más cercanos
-      const [day1Index, day2Index] = daysToMerge;
-      const mergedPlaces = [...dayRoutes[day1Index], ...dayRoutes[day2Index]];
-
-      // Optimizar el orden del día fusionado
-      const reoptimizedMerged = reoptimizeDayByProximity(mergedPlaces, locationsDistances);
-
-      // Reemplazar el primer día con el fusionado y eliminar el segundo
-      dayRoutes[day1Index] = reoptimizedMerged;
-      dayRoutes.splice(day2Index, 1);
-    }
-  }
-
-  // 7. RECALCULAR TIEMPOS Y CREAR RESULTADO FINAL
-  const finalRoute = [];
-
-  for (let dayIndex = 0; dayIndex < dayRoutes.length; dayIndex++) {
-    const dayNumber = dayIndex + 1;
-    const dayPlaces = dayRoutes[dayIndex];
-    const dayOfWeek = getDayOfWeek(dayIndex);
-
-    // Recalcular tiempos para este día
-    let dayTime = dailyStartTime;
-    let prevCoords = hotelCoordinates || (startPoint ? startPoint : null);
-
-    for (let j = 0; j < dayPlaces.length; j++) {
-      const place = dayPlaces[j];
-
-      // Actualizar día y orden
-      place.day = dayNumber;
-      place.order_index = j;
-      place.dayOfWeek = dayOfWeek;
-
-      // Recalcular tiempo de llegada
-      if (prevCoords) {
-        const distance = calculateDistance(prevCoords, place.coordinates);
-        const travelTime = calculateTravelTime(distance) * 60;
-        dayTime += travelTime;
-      }
-
-      // Ajustar por horario de apertura
-      const availableTime = findFirstAvailableTime(place.openingHours, dayOfWeek, dayTime);
-
-      if (availableTime !== null) {
-        dayTime = availableTime;
-      }
-
-      // Actualizar tiempos
-      const visitDuration = (place.visitDuration || 1) * 60;
-      place.estimatedArrival = minutesToTime(dayTime);
-      place.estimatedDeparture = minutesToTime(dayTime + visitDuration);
-
-      // Avanzar tiempo y actualizar coordenadas
-      dayTime += visitDuration;
-      prevCoords = place.coordinates;
-
-      // Eliminar propiedades temporales
-      delete place.originalIndex;
-
-      // Añadir al resultado final
-      finalRoute.push(place);
-    }
-  }
-
-  // Ordenar por día y luego por order_index
-  finalRoute.sort((a, b) => {
-    if (a.day !== b.day) return a.day - b.day;
-    return a.order_index - b.order_index;
-  });
-
-  return finalRoute;
-}
-
-/**
- * Optimiza el orden de los lugares dentro de un cluster
- * @param {Array} cluster - Cluster de índices de lugares 
- * @param {Array} distances - Matriz de distancias entre lugares
- * @param {Array} places - Lista completa de lugares
- * @returns {Array} - Cluster optimizado
- */
-function optimizeClusterOrder(cluster, distances, places) {
-  if (cluster.length <= 1) return cluster;
-
-  // Ordenar el cluster por orden de "vecino más cercano"
-  const visited = Array(cluster.length).fill(false);
-  const orderedCluster = [];
-
-  // Comenzar con cualquier lugar (preferiblemente esencial si hay)
-  let startIdx = 0;
-  for (let i = 0; i < cluster.length; i++) {
-    if (places[cluster[i]].isEssential) {
-      startIdx = i;
-      break;
-    }
-  }
-
-  let currentIdx = startIdx;
-  visited[currentIdx] = true;
-  orderedCluster.push(cluster[currentIdx]);
-
-  // Completar la ruta con vecinos más cercanos
-  while (orderedCluster.length < cluster.length) {
-    let nextIdx = -1;
-    let minDist = Infinity;
-
-    for (let i = 0; i < cluster.length; i++) {
-      if (!visited[i]) {
-        const dist = distances[cluster[currentIdx]][cluster[i]];
-        if (dist < minDist) {
-          minDist = dist;
-          nextIdx = i;
-        }
-      }
-    }
-
-    if (nextIdx !== -1) {
-      visited[nextIdx] = true;
-      orderedCluster.push(cluster[nextIdx]);
-      currentIdx = nextIdx;
-    } else {
-      break; // No debería ocurrir
-    }
-  }
-
-  return orderedCluster;
-}
-
-/**
- * Distribuye lugares esenciales y no esenciales manteniendo coherencia geográfica
- * @param {Array} essentialPlaces - Lugares esenciales
- * @param {Array} nonEssentialPlaces - Lugares no esenciales
- * @param {number} essentialPerDay - Lugares esenciales por día
- * @param {Array} distances - Matriz de distancias
- * @returns {Array} - Secuencia optimizada
- */
-function distributeEssentialPlaces(essentialPlaces, nonEssentialPlaces, essentialPerDay, distances) {
-  if (essentialPlaces.length === 0) return nonEssentialPlaces;
-  if (nonEssentialPlaces.length === 0) return essentialPlaces;
-
-  // Comenzar con los lugares esenciales
-  let result = [...essentialPlaces];
-
-  // Para cada lugar no esencial, encontrar el lugar en la secuencia más cercano
-  for (const nonEssentialIdx of nonEssentialPlaces) {
-    let bestPosition = 0;
-    let minDistance = Infinity;
-
-    // Encontrar la mejor posición (después del lugar más cercano)
-    for (let i = 0; i < result.length; i++) {
-      const distance = distances[result[i]][nonEssentialIdx];
-      if (distance < minDistance) {
-        minDistance = distance;
-        bestPosition = i + 1; // Insertar después del lugar cercano
-      }
-    }
-
-    // Insertar en la mejor posición
-    result.splice(bestPosition, 0, nonEssentialIdx);
-  }
-
-  return result;
-}
-
-/**
- * Reoptimiza el orden de los lugares en un día según proximidad
- * @param {Array} dayPlaces - Lugares asignados a un día
- * @param {Array} distances - Matriz de distancias
- * @returns {Array} - Lista reordenada de lugares
- */
-function reoptimizeDayByProximity(dayPlaces, distances) {
-  if (dayPlaces.length <= 1) return dayPlaces;
-
-  // Extraer índices originales
-  const indices = dayPlaces.map(place => place.originalIndex || 0);
-
-  // Crear matriz de distancias para este subconjunto
-  const n = indices.length;
-  const subDistances = Array(n).fill().map(() => Array(n).fill(0));
-
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      if (i !== j) {
-        const pi = indices[i];
-        const pj = indices[j];
-        subDistances[i][j] = distances[pi][pj];
-      }
-    }
-  }
-
-  // Ordenar por vecino más cercano
-  const visited = Array(n).fill(false);
-  const orderedIndices = [];
-
-  // Comenzar con el primer lugar
-  let currentIdx = 0;
-  visited[currentIdx] = true;
-  orderedIndices.push(currentIdx);
-
-  // Añadir el resto por proximidad
-  while (orderedIndices.length < n) {
-    let nextIdx = -1;
-    let minDist = Infinity;
-
-    for (let i = 0; i < n; i++) {
-      if (!visited[i]) {
-        if (subDistances[currentIdx][i] < minDist) {
-          minDist = subDistances[currentIdx][i];
-          nextIdx = i;
-        }
-      }
-    }
-
-    if (nextIdx !== -1) {
-      visited[nextIdx] = true;
-      orderedIndices.push(nextIdx);
-      currentIdx = nextIdx;
-    } else {
-      break;
-    }
-  }
-
-  // Crear nueva lista ordenada
-  const orderedDay = orderedIndices.map(idx => {
-    const place = dayPlaces[idx];
-    // Actualizar order_index
-    return {
+    // Asignar día 1 a todos los lugares
+    return optimizedRoute.map(place => ({
       ...place,
-      order_index: orderedIndices.indexOf(idx)
-    };
-  });
-
-  // Verificar lugares esenciales (no deberían quedar al final)
-  const essentials = orderedDay.filter(p => p.isEssential);
-  const nonEssentials = orderedDay.filter(p => !p.isEssential);
-
-  if (essentials.length > 0 && nonEssentials.length > 0) {
-    // Asegurar que al menos un lugar esencial esté al principio
-    const hasEssentialFirst = orderedDay[0].isEssential;
-
-    if (!hasEssentialFirst) {
-      // Mover el primer esencial al principio
-      const firstEssential = essentials[0];
-      const currentIndex = orderedDay.indexOf(firstEssential);
-
-      // Solo si no está demasiado lejos del principio
-      if (currentIndex > 2) {
-        orderedDay.splice(currentIndex, 1);
-        orderedDay.unshift(firstEssential);
-
-        // Reajustar índices
-        orderedDay.forEach((p, idx) => {
-          p.order_index = idx;
-        });
-      }
-    }
+      day: 1
+    }));
   }
 
-  return orderedDay;
+  try {
+    // Implementación simplificada: distribuir lugares equitativamente por días
+    // Primero obtener una ruta optimizada para un solo día
+    const optimizedSingleDay = findOptimalRoute(places, distances, startPoint, hotel);
+
+    // Calcular lugares por día de forma equitativa
+    const placesPerDay = Math.ceil(places.length / days);
+    console.log(`Distribuyendo aproximadamente ${placesPerDay} lugares por día`);
+
+    // Distribuir lugares en días
+    const result = [];
+
+    for (let i = 0; i < optimizedSingleDay.length; i++) {
+      const place = optimizedSingleDay[i];
+      const day = Math.floor(i / placesPerDay) + 1;
+      const dayOrder = i % placesPerDay;
+
+      // Asegurarse de no exceder el número de días
+      const finalDay = Math.min(day, days);
+
+      result.push({
+        ...place,
+        day: finalDay,
+        order_in_day: dayOrder
+      });
+    }
+
+    // Ordenar por día y luego por orden dentro del día
+    result.sort((a, b) => {
+      if (a.day !== b.day) return a.day - b.day;
+      return a.order_in_day - b.order_in_day;
+    });
+
+    // Actualizar order_index global
+    result.forEach((place, index) => {
+      place.order_index = index;
+    });
+
+    console.log(`Ruta optimizada generada para ${days} días`);
+    return result;
+
+  } catch (error) {
+    console.error("Error en algoritmo de optimización multidía:", error);
+
+    // En caso de error, devolver una distribución simple
+    const result = [];
+    const placesPerDay = Math.ceil(places.length / days);
+
+    for (let i = 0; i < places.length; i++) {
+      const day = Math.min(Math.floor(i / placesPerDay) + 1, days);
+      result.push({
+        ...places[i],
+        day: day,
+        order_index: i,
+        order_in_day: i % placesPerDay
+      });
+    }
+
+    return result;
+  }
 }
 
 module.exports = routeRoutes; 
