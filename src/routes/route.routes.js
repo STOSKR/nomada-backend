@@ -826,7 +826,34 @@ async function routeRoutes(fastify, options) {
           });
         }
 
+        // Asegurarse de que todas las propiedades necesarias estén presentes
+        optimizedRoute = optimizedRoute.map((place, index) => {
+          // Verificar si faltan las propiedades requeridas
+          if (typeof place.day === 'undefined') {
+            place.day = Math.min(Math.floor(index / Math.ceil(optimizedRoute.length / days)) + 1, days);
+          }
+          if (typeof place.order_in_day === 'undefined') {
+            // Calcular orden dentro del día
+            const placesInSameDay = optimizedRoute.filter(p => p.day === place.day);
+            const sameDay = placesInSameDay.findIndex(p => p.order_index === place.order_index);
+            place.order_in_day = sameDay >= 0 ? sameDay : index % Math.ceil(optimizedRoute.length / days);
+          }
+          return place;
+        });
+
         console.log(`Ruta optimizada generada con ${optimizedRoute.length} lugares`);
+
+        // Verificar rápidamente que tenemos toda la información necesaria
+        const hasMissingInfo = optimizedRoute.some(place =>
+          typeof place.day === 'undefined' ||
+          typeof place.order_in_day === 'undefined' ||
+          typeof place.order_index === 'undefined'
+        );
+
+        if (hasMissingInfo) {
+          console.warn('Algunos lugares no tienen toda la información necesaria');
+        }
+
         return {
           success: true,
           optimizedRoute
@@ -835,11 +862,18 @@ async function routeRoutes(fastify, options) {
         console.error('Error durante el proceso de optimización:', error);
 
         // Si hay un error durante la optimización, responder con un array ordenado simple
-        const simpleOptimizedRoute = placesWithCoordinates.map((place, index) => ({
-          ...place,
-          order_index: index,
-          day: Math.min(Math.floor(index / Math.ceil(placesWithCoordinates.length / days)) + 1, days)
-        }));
+        const simpleOptimizedRoute = placesWithCoordinates.map((place, index) => {
+          const day = Math.min(Math.floor(index / Math.ceil(placesWithCoordinates.length / days)) + 1, days);
+          const placesPerDay = Math.ceil(placesWithCoordinates.length / days);
+          const order_in_day = index % placesPerDay;
+
+          return {
+            ...place,
+            order_index: index,
+            day: day,
+            order_in_day: order_in_day
+          };
+        });
 
         console.log('Devolviendo una ruta simple sin optimizar debido al error');
         return {
@@ -1358,7 +1392,9 @@ function findOptimalRoute(places, distances, startPoint = null, hotel = null) {
     const optimizedRoute = route.map((placeIndex, index) => {
       return {
         ...places[placeIndex],
-        order_index: index
+        order_index: index,
+        day: 1,                // Todos en día 1 para ruta de un solo día
+        order_in_day: index    // Orden dentro del día es igual al orden global
       };
     });
 
@@ -1370,7 +1406,9 @@ function findOptimalRoute(places, distances, startPoint = null, hotel = null) {
     // En caso de error, devolver los lugares en su orden original
     return places.map((place, index) => ({
       ...place,
-      order_index: index
+      order_index: index,
+      day: 1,
+      order_in_day: index
     }));
   }
 }
