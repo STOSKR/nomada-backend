@@ -1439,30 +1439,61 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
   }
 
   try {
-    // Implementación simplificada: distribuir lugares equitativamente por días
-    // Primero obtener una ruta optimizada para un solo día
-    const optimizedSingleDay = findOptimalRoute(places, distances, startPoint, hotel);
+    // Algoritmo mejorado que combina proximidad geográfica y equilibrio de carga entre días
 
-    // Calcular lugares por día de forma equitativa
-    const placesPerDay = Math.ceil(places.length / days);
-    console.log(`Distribuyendo aproximadamente ${placesPerDay} lugares por día`);
+    // PASO 1: Crear una matriz de distancias entre lugares
+    const offset = distances.length - places.length;
+    const placeDistances = [];
 
-    // Distribuir lugares en días
+    for (let i = 0; i < places.length; i++) {
+      placeDistances[i] = [];
+      for (let j = 0; j < places.length; j++) {
+        placeDistances[i][j] = distances[i + offset][j + offset];
+      }
+    }
+
+    // PASO 2: Crear un grafo de lugares donde cada lugar está conectado a sus N vecinos más cercanos
+    const graph = buildNearestNeighborsGraph(places, placeDistances, 3);
+
+    // PASO 3: Equilibrar la asignación de lugares a días considerando proximidad y duración
+    const dayAssignments = balanceDaysAssignment(places, placeDistances, graph, days, maxHoursPerDay);
+
+    // PASO 4: Optimizar el orden de visita dentro de cada día
     const result = [];
 
-    for (let i = 0; i < optimizedSingleDay.length; i++) {
-      const place = optimizedSingleDay[i];
-      const day = Math.floor(i / placesPerDay) + 1;
-      const dayOrder = i % placesPerDay;
+    for (let dayNum = 1; dayNum <= days; dayNum++) {
+      const dayIndices = dayAssignments.filter(assignment => assignment.day === dayNum)
+        .map(assignment => assignment.placeIndex);
 
-      // Asegurarse de no exceder el número de días
-      const finalDay = Math.min(day, days);
+      if (dayIndices.length === 0) continue;
 
-      result.push({
-        ...place,
-        day: finalDay,
-        order_in_day: dayOrder
-      });
+      console.log(`Optimizando día ${dayNum} con ${dayIndices.length} lugares`);
+
+      // Extraer lugares para este día
+      const dayPlaces = dayIndices.map(idx => places[idx]);
+
+      // Calcular matriz de distancias para este día
+      let dayDistances;
+      if (hotel || startPoint) {
+        const dayPoints = [hotel ? hotel.coordinates : startPoint, ...dayPlaces.map(p => p.coordinates)];
+        dayDistances = calculateDistanceMatrixSimple(dayPoints);
+      } else {
+        dayDistances = calculateDistanceMatrixSimple(dayPlaces.map(p => p.coordinates));
+      }
+
+      // Optimizar orden dentro del día
+      const orderedIndices = optimizeDayOrder(dayPlaces, dayDistances, hotel || startPoint ? 0 : null);
+
+      // Añadir lugares ordenados a la ruta final
+      for (let j = 0; j < orderedIndices.length; j++) {
+        const placeIndex = dayIndices[orderedIndices[j]];
+        result.push({
+          ...places[placeIndex],
+          day: dayNum,
+          order_in_day: j,
+          order_index: result.length
+        });
+      }
     }
 
     // Ordenar por día y luego por orden dentro del día
@@ -1476,9 +1507,8 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
       place.order_index = index;
     });
 
-    console.log(`Ruta optimizada generada para ${days} días`);
+    console.log(`Ruta optimizada generada para ${days} días con carga equilibrada`);
     return result;
-
   } catch (error) {
     console.error("Error en algoritmo de optimización multidía:", error);
 
@@ -1498,6 +1528,331 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
 
     return result;
   }
+}
+
+/**
+ * Construye un grafo donde cada nodo (lugar) está conectado a sus N vecinos más cercanos
+ * @param {Array} places - Array de lugares
+ * @param {Array} distances - Matriz de distancias entre lugares
+ * @param {number} numNeighbors - Número de vecinos a considerar por lugar
+ * @returns {Object} Grafo de adyacencias
+ */
+function buildNearestNeighborsGraph(places, distances, numNeighbors = 3) {
+  const n = places.length;
+  const graph = {};
+
+  for (let i = 0; i < n; i++) {
+    // Para cada lugar, ordenar todos los demás por distancia
+    const neighbors = [];
+    for (let j = 0; j < n; j++) {
+      if (i !== j) {
+        neighbors.push({
+          index: j,
+          distance: distances[i][j]
+        });
+      }
+    }
+
+    // Ordenar por distancia y tomar los N más cercanos
+    neighbors.sort((a, b) => a.distance - b.distance);
+    const nearestNeighbors = neighbors.slice(0, Math.min(numNeighbors, neighbors.length));
+
+    // Guardar los índices de los vecinos más cercanos
+    graph[i] = nearestNeighbors.map(neighbor => neighbor.index);
+  }
+
+  return graph;
+}
+
+/**
+ * Asigna lugares a días balanceando proximidad y duración
+ * @param {Array} places - Array de lugares
+ * @param {Array} distances - Matriz de distancias
+ * @param {Object} graph - Grafo de vecinos cercanos
+ * @param {number} numDays - Número de días disponibles
+ * @param {number} maxHoursPerDay - Máximo de horas por día
+ * @returns {Array} Array de asignaciones {placeIndex, day}
+ */
+function balanceDaysAssignment(places, distances, graph, numDays, maxHoursPerDay) {
+  const n = places.length;
+
+  // Inicializar estructura para asignaciones
+  const assignments = [];
+
+  // Calcular el tiempo total de todas las visitas
+  const totalDuration = places.reduce((sum, place) => sum + (place.visitDuration || 1), 0);
+
+  // Duración ideal por día para equilibrar
+  const targetDurationPerDay = totalDuration / numDays;
+  console.log(`Duración total: ${totalDuration} horas, Objetivo por día: ${targetDurationPerDay} horas`);
+
+  // Inicializar días
+  const days = Array(numDays).fill().map((_, i) => ({
+    dayNum: i + 1,
+    places: [],
+    currentDuration: 0,
+    maxDuration: Math.min(maxHoursPerDay, targetDurationPerDay * 1.5) // Permitir algo de flexibilidad
+  }));
+
+  // Seleccionar puntos de partida para cada día (lugares distantes entre sí)
+  const startingPoints = selectDistantStartingPoints(places, distances, numDays);
+
+  // Asignar los puntos de partida a sus respectivos días
+  startingPoints.forEach((pointIdx, i) => {
+    if (i < days.length) {
+      days[i].places.push(pointIdx);
+      days[i].currentDuration += (places[pointIdx].visitDuration || 1);
+      assignments.push({ placeIndex: pointIdx, day: days[i].dayNum });
+    }
+  });
+
+  // Crear conjunto de lugares ya asignados
+  const assignedPlaces = new Set(startingPoints);
+
+  // Asignar el resto de lugares
+  while (assignedPlaces.size < n) {
+    let bestAssignment = null;
+    let minDistance = Infinity;
+    let bestDayIndex = -1;
+
+    // Para cada lugar no asignado
+    for (let i = 0; i < n; i++) {
+      if (assignedPlaces.has(i)) continue;
+
+      const placeDuration = places[i].visitDuration || 1;
+
+      // Probar asignarlo a cada día
+      for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
+        const day = days[dayIdx];
+
+        // Verificar si cabe en el día
+        if (day.currentDuration + placeDuration > day.maxDuration) continue;
+
+        // Si el día está vacío, asignar directamente
+        if (day.places.length === 0) {
+          bestAssignment = i;
+          bestDayIndex = dayIdx;
+          minDistance = 0;
+          break;
+        }
+
+        // Calcular la distancia mínima a cualquier lugar ya asignado a este día
+        let minDistToDay = Infinity;
+        for (const assignedIdx of day.places) {
+          const dist = distances[i][assignedIdx];
+          if (dist < minDistToDay) {
+            minDistToDay = dist;
+          }
+        }
+
+        // Preferir lugares cercanos a los ya asignados en el día
+        // y días con menos carga
+        const dayFillRatio = day.currentDuration / targetDurationPerDay;
+
+        // Fórmula que favorece cercanía y equilibrio
+        const score = minDistToDay * (0.7 + (0.3 * dayFillRatio));
+
+        if (score < minDistance) {
+          minDistance = score;
+          bestAssignment = i;
+          bestDayIndex = dayIdx;
+        }
+      }
+
+      // Si encontramos una asignación para este lugar, salir del bucle
+      if (bestAssignment !== null && bestDayIndex >= 0) break;
+    }
+
+    // Si encontramos un lugar para asignar
+    if (bestAssignment !== null && bestDayIndex >= 0) {
+      // Asignar el lugar al día
+      days[bestDayIndex].places.push(bestAssignment);
+      days[bestDayIndex].currentDuration += (places[bestAssignment].visitDuration || 1);
+      assignedPlaces.add(bestAssignment);
+      assignments.push({ placeIndex: bestAssignment, day: days[bestDayIndex].dayNum });
+    } else {
+      // Si no pudimos asignar más lugares, intentar relajar las restricciones
+      let leastFilledDay = days.reduce((min, day, idx) =>
+        day.currentDuration < days[min].currentDuration ? idx : min, 0);
+
+      // Buscar un lugar no asignado
+      for (let i = 0; i < n; i++) {
+        if (!assignedPlaces.has(i)) {
+          // Asignarlo al día con menos carga
+          days[leastFilledDay].places.push(i);
+          days[leastFilledDay].currentDuration += (places[i].visitDuration || 1);
+          assignedPlaces.add(i);
+          assignments.push({ placeIndex: i, day: days[leastFilledDay].dayNum });
+          break;
+        }
+      }
+
+      // Si aún así no pudimos asignar más, salir del bucle
+      if (assignedPlaces.size === n - 1) {
+        // Encontrar el último lugar no asignado
+        for (let i = 0; i < n; i++) {
+          if (!assignedPlaces.has(i)) {
+            leastFilledDay = days.reduce((min, day, idx) =>
+              day.currentDuration < days[min].currentDuration ? idx : min, 0);
+
+            days[leastFilledDay].places.push(i);
+            assignedPlaces.add(i);
+            assignments.push({ placeIndex: i, day: days[leastFilledDay].dayNum });
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Registrar la distribución final
+  days.forEach(day => {
+    console.log(`Día ${day.dayNum}: ${day.places.length} lugares, ${day.currentDuration.toFixed(1)} horas`);
+  });
+
+  return assignments;
+}
+
+/**
+ * Selecciona puntos distantes entre sí para usar como puntos de partida de cada día
+ * @param {Array} places - Array de lugares
+ * @param {Array} distances - Matriz de distancias
+ * @param {number} numPoints - Número de puntos a seleccionar
+ * @returns {Array} Índices de los puntos seleccionados
+ */
+function selectDistantStartingPoints(places, distances, numPoints) {
+  const n = places.length;
+
+  // Si tenemos pocos lugares, devolver todos
+  if (n <= numPoints) {
+    return Array.from({ length: n }, (_, i) => i);
+  }
+
+  // Empezar con el lugar que tenga más duración (visita más larga)
+  let firstPoint = 0;
+  let maxDuration = 0;
+
+  for (let i = 0; i < n; i++) {
+    const duration = places[i].visitDuration || 1;
+    if (places[i].isEssential && duration > maxDuration) {
+      maxDuration = duration;
+      firstPoint = i;
+    }
+  }
+
+  if (maxDuration === 0) {
+    // Si no hay lugares esenciales, tomar el de mayor duración
+    for (let i = 0; i < n; i++) {
+      const duration = places[i].visitDuration || 1;
+      if (duration > maxDuration) {
+        maxDuration = duration;
+        firstPoint = i;
+      }
+    }
+  }
+
+  const selected = [firstPoint];
+
+  // Seleccionar el resto de puntos lo más alejados posible de los ya seleccionados
+  while (selected.length < numPoints) {
+    let maxMinDistance = -1;
+    let bestPoint = -1;
+
+    for (let i = 0; i < n; i++) {
+      if (selected.includes(i)) continue;
+
+      // Calcular la distancia mínima a cualquier punto ya seleccionado
+      let minDist = Infinity;
+      for (const pointIdx of selected) {
+        if (distances[i][pointIdx] < minDist) {
+          minDist = distances[i][pointIdx];
+        }
+      }
+
+      // Preferir puntos que estén lejos de todos los ya seleccionados
+      if (minDist > maxMinDistance) {
+        maxMinDistance = minDist;
+        bestPoint = i;
+      }
+    }
+
+    if (bestPoint !== -1) {
+      selected.push(bestPoint);
+    } else {
+      break; // No deberíamos llegar aquí
+    }
+  }
+
+  // Si no tenemos suficientes puntos, añadir algunos arbitrariamente
+  while (selected.length < numPoints && selected.length < n) {
+    for (let i = 0; i < n; i++) {
+      if (!selected.includes(i)) {
+        selected.push(i);
+        if (selected.length >= numPoints) break;
+      }
+    }
+  }
+
+  return selected;
+}
+
+/**
+ * Optimiza el orden de visita de lugares dentro de un día usando vecino más cercano
+ * @param {Array} places - Array de lugares para el día
+ * @param {Array} distances - Matriz de distancias
+ * @param {number|null} startIdx - Índice del punto de inicio (hotel/startPoint)
+ * @returns {Array} Array de índices ordenados para visitar los lugares
+ */
+function optimizeDayOrder(places, distances, startIdx = null) {
+  const n = places.length;
+  const visited = Array(n).fill(false);
+  const route = [];
+
+  // Determinar punto de inicio (desde hotel o primer lugar)
+  let currentIdx = 0;
+
+  // Si hay punto de inicio, encontrar el lugar más cercano
+  if (startIdx !== null) {
+    let minDist = Infinity;
+    for (let i = 0; i < n; i++) {
+      const dist = distances[startIdx][i + (startIdx === 0 ? 1 : 0)];
+      if (dist < minDist) {
+        minDist = dist;
+        currentIdx = i;
+      }
+    }
+  }
+
+  // Añadir el primer lugar
+  visited[currentIdx] = true;
+  route.push(currentIdx);
+
+  // Construir el resto de la ruta para el día
+  while (route.length < n) {
+    let nextIdx = -1;
+    let minDist = Infinity;
+
+    // Encontrar el vecino más cercano no visitado
+    for (let i = 0; i < n; i++) {
+      if (!visited[i]) {
+        const dist = distances[currentIdx + (startIdx === 0 ? 1 : 0)][i + (startIdx === 0 ? 1 : 0)];
+        if (dist < minDist) {
+          minDist = dist;
+          nextIdx = i;
+        }
+      }
+    }
+
+    if (nextIdx !== -1) {
+      visited[nextIdx] = true;
+      route.push(nextIdx);
+      currentIdx = nextIdx;
+    } else {
+      break;
+    }
+  }
+
+  return route;
 }
 
 module.exports = routeRoutes; 
