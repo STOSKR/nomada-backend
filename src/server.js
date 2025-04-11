@@ -82,12 +82,18 @@ async function registerPlugins() {
         throw new Error('No se proporcionó token de autenticación');
       }
 
-      const token = authHeader.replace('Bearer ', '');
+      // Modificación: usar directamente el token sin necesidad de quitar "Bearer "
+      let token = authHeader;
+      // Si contiene "Bearer ", quitarlo para mantener compatibilidad
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
 
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'un_secreto_muy_seguro');
+        const decoded = await fastify.jwt.verify(token);
         request.user = { id: decoded.id };
       } catch (err) {
+        request.log.error(`Error de verificación JWT: ${err.message}`);
         throw new Error('Token de autenticación inválido');
       }
     } catch (err) {
@@ -108,10 +114,15 @@ async function registerPlugins() {
         return;
       }
 
-      const token = authHeader.replace('Bearer ', '');
+      // Modificación: usar directamente el token sin necesidad de quitar "Bearer "
+      let token = authHeader;
+      // Si contiene "Bearer ", quitarlo para mantener compatibilidad
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
 
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'un_secreto_muy_seguro');
+        const decoded = await fastify.jwt.verify(token);
         const user = { id: decoded.id };
         request.user = user;
       } catch (error) {
