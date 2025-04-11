@@ -47,24 +47,38 @@ class UserService {
       console.error('Error al contar rutas del usuario:', routesError);
     }
 
-    // Obtener las rutas públicas del usuario
-    const { data: userRoutes, error: userRoutesError } = await this.supabase
+    // Obtener todas las rutas del usuario (no solo las públicas)
+    let routesQuery = this.supabase
       .from('routes')
       .select(`
         id,
-        title,
-        description,
-        country,
         is_public,
         likes_count,
-        created_at
+        saved_count,
+        comments_count,
+        cover_image, 
+        created_at,
+        updated_at,
+        user_id
       `)
       .eq('user_id', userId)
-      .eq('is_public', true)
       .order('created_at', { ascending: false });
+
+    // Si el usuario que consulta no es el propietario, mostrar solo rutas públicas
+    if (currentUserId !== userId) {
+      routesQuery = routesQuery.eq('is_public', true);
+    }
+
+    const { data: userRoutes, error: userRoutesError } = await routesQuery;
 
     if (userRoutesError) {
       console.error('Error al obtener rutas del usuario:', userRoutesError);
+    }
+
+    // Añadir log para depurar
+    console.log(`Rutas encontradas para el usuario ${userId}:`, userRoutes ? userRoutes.length : 0);
+    if (userRoutes && userRoutes.length > 0) {
+      console.log('Primera ruta:', JSON.stringify(userRoutes[0]));
     }
 
     // Verificar si el usuario actual sigue a este perfil
@@ -82,7 +96,7 @@ class UserService {
       }
     }
 
-    return {
+    const resultObj = {
       id: data.id,
       nomada_id: data.nomada_id,
       username: data.username,
@@ -97,6 +111,14 @@ class UserService {
       isFollowing,
       routes: userRoutes || []
     };
+
+    // Log del objeto resultante
+    console.log(`Objeto de perfil a devolver para ${userId}:`, {
+      ...resultObj,
+      routes: `Array con ${resultObj.routes.length} rutas`
+    });
+
+    return resultObj;
   }
 
   /**
@@ -330,24 +352,38 @@ class UserService {
       console.error('Error al contar rutas del usuario:', routesError);
     }
 
-    // Obtener las rutas públicas del usuario
-    const { data: userRoutes, error: userRoutesError } = await this.supabase
+    // Obtener todas las rutas del usuario (o solo las públicas si no es el propietario)
+    let routesQuery = this.supabase
       .from('routes')
       .select(`
         id,
-        title,
-        description,
-        country,
         is_public,
         likes_count,
-        created_at
+        saved_count,
+        comments_count,
+        cover_image, 
+        created_at,
+        updated_at,
+        user_id
       `)
       .eq('user_id', data.id)
-      .eq('is_public', true)
       .order('created_at', { ascending: false });
+
+    // Si el usuario que consulta no es el propietario, mostrar solo rutas públicas
+    if (currentUserId !== data.id) {
+      routesQuery = routesQuery.eq('is_public', true);
+    }
+
+    const { data: userRoutes, error: userRoutesError } = await routesQuery;
 
     if (userRoutesError) {
       console.error('Error al obtener rutas del usuario:', userRoutesError);
+    }
+
+    // Añadir log para depurar
+    console.log(`Rutas encontradas para el usuario ${data.id}:`, userRoutes ? userRoutes.length : 0);
+    if (userRoutes && userRoutes.length > 0) {
+      console.log('Primera ruta:', JSON.stringify(userRoutes[0]));
     }
 
     // Verificar si el usuario actual sigue a este perfil
@@ -365,7 +401,7 @@ class UserService {
       }
     }
 
-    return {
+    const resultObj = {
       id: data.id,
       nomada_id: data.nomada_id,
       username: data.username,
@@ -380,6 +416,14 @@ class UserService {
       isFollowing,
       routes: userRoutes || []
     };
+
+    // Log del objeto resultante
+    console.log(`Objeto de perfil a devolver para ${data.id}:`, {
+      ...resultObj,
+      routes: `Array con ${resultObj.routes.length} rutas`
+    });
+
+    return resultObj;
   }
 }
 

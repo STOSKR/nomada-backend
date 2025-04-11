@@ -263,22 +263,33 @@ const schemas = {
       200: {
         type: 'object',
         properties: {
-          success: { type: 'boolean' },
-          user: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              nomada_id: { type: 'string' },
-              username: { type: 'string' },
-              email: { type: 'string' },
-              bio: { type: 'string' },
-              avatar_url: { type: 'string', description: 'URL del avatar del usuario' },
-              preferences: { type: 'object' },
-              visitedCountries: { type: 'array', items: { type: 'string' } },
-              followersCount: { type: 'number' },
-              followingCount: { type: 'number' },
-              routesCount: { type: 'number' },
-              isFollowing: { type: ['boolean', 'null'] }
+          id: { type: 'string' },
+          nomada_id: { type: 'string' },
+          username: { type: 'string' },
+          email: { type: 'string' },
+          bio: { type: 'string' },
+          avatar_url: { type: 'string', description: 'URL del avatar del usuario' },
+          preferences: { type: 'object' },
+          visitedCountries: { type: 'array', items: { type: 'string' } },
+          followersCount: { type: 'number' },
+          followingCount: { type: 'number' },
+          routesCount: { type: 'number' },
+          isFollowing: { type: ['boolean', 'null'] },
+          routes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                is_public: { type: 'boolean' },
+                likes_count: { type: 'integer' },
+                saved_count: { type: 'integer' },
+                comments_count: { type: 'integer' },
+                cover_image: { type: 'string' },
+                created_at: { type: 'string' },
+                updated_at: { type: 'string' },
+                user_id: { type: 'string' }
+              }
             }
           }
         }
@@ -323,19 +334,68 @@ async function userRoutes(fastify, options) {
 
   // Obtener perfil (autenticado)
   fastify.get('/profile', {
-    schema: schemas.getProfile,
+    schema: {
+      description: 'Obtener perfil del usuario autenticado',
+      tags: ['usuarios', 'perfil'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            nomada_id: { type: 'string' },
+            username: { type: 'string' },
+            email: { type: 'string' },
+            bio: { type: 'string' },
+            avatar_url: { type: 'string' },
+            preferences: { type: 'object' },
+            visitedCountries: { type: 'array', items: { type: 'string' } },
+            followersCount: { type: 'integer' },
+            followingCount: { type: 'integer' },
+            routesCount: { type: 'integer' },
+            isFollowing: { type: ['boolean', 'null'] },
+            routes: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  is_public: { type: 'boolean' },
+                  likes_count: { type: 'integer' },
+                  saved_count: { type: 'integer' },
+                  comments_count: { type: 'integer' },
+                  cover_image: { type: 'string' },
+                  created_at: { type: 'string' },
+                  updated_at: { type: 'string' },
+                  user_id: { type: 'string' }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     preValidation: [fastify.authenticate]
-  }, async (request, reply) => {
+  }, async function (request, reply) {
     try {
       const userId = request.user.id;
-      const result = await userService.getUserProfile(userId, userId);
-      return {
-        success: true,
-        user: result
-      };
+
+      console.log('Obteniendo perfil para usuario autenticado:', userId);
+
+      const userService = new UserService(this.supabase);
+      const profile = await userService.getUserProfile(userId, userId);
+
+      console.log('Perfil cargado correctamente:', {
+        id: profile.id,
+        username: profile.username,
+        routesCount: profile.routesCount,
+        routesIncluidos: profile.routes ? profile.routes.length : 0
+      });
+
+      // Devolver directamente el perfil sin envolverlo
+      return reply.code(200).send(profile);
     } catch (error) {
-      request.log.error(error);
-      return reply.code(404).send({
+      request.log.error('Error al obtener perfil:', error);
+      return reply.code(400).send({
         success: false,
         message: error.message
       });
@@ -354,10 +414,8 @@ async function userRoutes(fastify, options) {
       // Si el ID es "me", devuelve el perfil del usuario actual
       if (requestedId === "me") {
         const result = await userService.getUserProfile(currentUserId, currentUserId);
-        return {
-          success: true,
-          user: result
-        };
+        // Devolver directamente el perfil sin envolverlo
+        return reply.code(200).send(result);
       }
 
       // Verificar si es un UUID válido
@@ -374,10 +432,8 @@ async function userRoutes(fastify, options) {
         result = await userService.getUserByUsername(requestedId, currentUserId);
       }
 
-      return {
-        success: true,
-        user: result
-      };
+      // Devolver directamente el perfil sin envolverlo
+      return reply.code(200).send(result);
     } catch (error) {
       request.log.error(error);
       return reply.code(404).send({
