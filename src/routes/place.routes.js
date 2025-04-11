@@ -27,6 +27,12 @@ const schemas = {
                     name: { type: 'string' },
                     description: { type: 'string' },
                     coordinates: { type: 'string' },
+                    address: { type: 'string' },
+                    rating: { type: 'number' },
+                    formatted_schedule: { type: 'string' },
+                    schedule: { type: 'object' },
+                    order_in_day: { type: 'integer' },
+                    day_number: { type: 'integer' },
                     order_index: { type: 'integer' },
                     route_id: { type: 'string' },
                     created_at: { type: 'string', format: 'date-time' },
@@ -254,31 +260,18 @@ async function placeRoutes(fastify, options) {
         preValidation: [fastify.authenticate]
     }, async (request, reply) => {
         try {
-            const placeId = request.params.id;
-            const userId = request.user.id;
+            const { id } = request.params;
+            const userId = request.user?.id;
 
-            const place = await placeService.getPlaceWithPhotos(placeId, userId);
+            const place = await placeService.getPlaceWithPhotos(id, userId);
 
-            return place;
+            // Añadir horario formateado
+            place.formatted_schedule = placeService.formatSchedule(place.schedule);
+
+            return reply.code(200).send(place);
         } catch (error) {
             request.log.error(error);
-
-            if (error.message === 'Lugar no encontrado') {
-                return reply.code(404).send({
-                    success: false,
-                    message: 'Lugar no encontrado'
-                });
-            }
-
-            if (error.message.includes('No tienes permiso')) {
-                return reply.code(403).send({
-                    success: false,
-                    message: error.message
-                });
-            }
-
-            return reply.code(500).send({
-                success: false,
+            return reply.code(error.statusCode || 500).send({
                 message: error.message
             });
         }

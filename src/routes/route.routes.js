@@ -19,8 +19,6 @@ const schemas = {
       properties: {
         userId: { type: 'string' },
         featured: { type: 'boolean' },
-        country: { type: 'string' },
-        tag: { type: 'string' },
         limit: { type: 'integer', default: 20 },
         offset: { type: 'integer', default: 0 }
       }
@@ -32,18 +30,19 @@ const schemas = {
           type: 'object',
           properties: {
             id: { type: 'string' },
-            title: { type: 'string' },
-            description: { type: 'string' },
-            country: { type: 'string' },
-            likes_count: { type: 'integer' },
             is_public: { type: 'boolean' },
+            likes_count: { type: 'integer' },
+            saved_count: { type: 'integer' },
+            comments_count: { type: 'integer' },
+            cover_image: { type: 'string' },
             created_at: { type: 'string', format: 'date-time' },
             user: {
               type: 'object',
               properties: {
                 id: { type: 'string' },
                 username: { type: 'string' },
-                full_name: { type: 'string' }
+                full_name: { type: 'string' },
+                avatar_url: { type: 'string' }
               }
             }
           }
@@ -69,11 +68,11 @@ const schemas = {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          title: { type: 'string' },
-          description: { type: 'string' },
-          country: { type: 'string' },
-          likes_count: { type: 'integer' },
           is_public: { type: 'boolean' },
+          likes_count: { type: 'integer' },
+          saved_count: { type: 'integer' },
+          comments_count: { type: 'integer' },
+          cover_image: { type: 'string' },
           created_at: { type: 'string', format: 'date-time' },
           user: {
             type: 'object',
@@ -91,7 +90,12 @@ const schemas = {
                 id: { type: 'string' },
                 name: { type: 'string' },
                 description: { type: 'string' },
+                address: { type: 'string' },
                 coordinates: { type: 'string' },
+                rating: { type: 'number' },
+                formatted_schedule: { type: 'string' },
+                order_in_day: { type: 'integer' },
+                day_number: { type: 'integer' },
                 order_index: { type: 'integer' },
                 photos: {
                   type: 'array',
@@ -121,17 +125,9 @@ const schemas = {
     security: [{ apiKey: [] }],
     body: {
       type: 'object',
-      required: ['title'],
       properties: {
-        title: { type: 'string' },
-        description: { type: 'string' },
-        country: { type: 'string' },
         is_public: { type: 'boolean', default: true },
         cover_image: { type: 'string' },
-        tags: {
-          type: 'array',
-          items: { type: 'string' }
-        },
         places: {
           type: 'array',
           items: {
@@ -140,6 +136,62 @@ const schemas = {
             properties: {
               name: { type: 'string' },
               description: { type: 'string' },
+              address: { type: 'string' },
+              rating: { type: 'number' },
+              schedule: {
+                type: 'object',
+                properties: {
+                  monday: {
+                    type: 'object',
+                    properties: {
+                      open: { type: 'string' },
+                      close: { type: 'string' }
+                    }
+                  },
+                  tuesday: {
+                    type: 'object',
+                    properties: {
+                      open: { type: 'string' },
+                      close: { type: 'string' }
+                    }
+                  },
+                  wednesday: {
+                    type: 'object',
+                    properties: {
+                      open: { type: 'string' },
+                      close: { type: 'string' }
+                    }
+                  },
+                  thursday: {
+                    type: 'object',
+                    properties: {
+                      open: { type: 'string' },
+                      close: { type: 'string' }
+                    }
+                  },
+                  friday: {
+                    type: 'object',
+                    properties: {
+                      open: { type: 'string' },
+                      close: { type: 'string' }
+                    }
+                  },
+                  saturday: {
+                    type: 'object',
+                    properties: {
+                      open: { type: 'string' },
+                      close: { type: 'string' }
+                    }
+                  },
+                  sunday: {
+                    type: 'object',
+                    properties: {
+                      open: { type: 'string' },
+                      close: { type: 'string' }
+                    }
+                  }
+                }
+              },
               coordinates: {
                 type: 'object',
                 properties: {
@@ -147,7 +199,8 @@ const schemas = {
                   lng: { type: 'number' }
                 }
               },
-              order_index: { type: 'integer' }
+              day_number: { type: 'integer' },
+              order_in_day: { type: 'integer' }
             }
           }
         }
@@ -162,8 +215,7 @@ const schemas = {
           route: {
             type: 'object',
             properties: {
-              id: { type: 'string' },
-              title: { type: 'string' }
+              id: { type: 'string' }
             }
           }
         }
@@ -186,15 +238,8 @@ const schemas = {
     body: {
       type: 'object',
       properties: {
-        title: { type: 'string' },
-        description: { type: 'string' },
-        country: { type: 'string' },
         is_public: { type: 'boolean' },
-        cover_image: { type: 'string' },
-        tags: {
-          type: 'array',
-          items: { type: 'string' }
-        }
+        cover_image: { type: 'string' }
       }
     },
     response: {
@@ -310,7 +355,7 @@ const schemas = {
       }
     }
   },
-  
+
   // Esquema para optimizar rutas de viaje
   optimizeRoute: {
     description: 'Optimizar el orden de visita de lugares en una ruta',
@@ -337,7 +382,7 @@ const schemas = {
                 }
               },
               visitDuration: { type: 'number', description: 'Duración estimada de la visita en horas' },
-              openingHours: { 
+              openingHours: {
                 type: 'object',
                 properties: {
                   open: { type: 'string', description: 'Hora de apertura en formato HH:MM' },
@@ -417,24 +462,25 @@ async function routeRoutes(fastify, options) {
   // Listar rutas (con filtros)
   fastify.get('/', {
     schema: schemas.getRoutes,
-    preValidation: [fastify.authenticate]
-  }, async (request, reply) => {
+    preValidation: [fastify.authenticateOptional]
+  }, async function (request, reply) {
     try {
       const filters = request.query;
-
-      // Si se solicitan rutas del usuario actual, reemplazar 'me' por el ID real
-      if (filters.userId === 'me') {
-        filters.userId = request.user.id;
+      // Si hay usuario autenticado, se obtiene su ID
+      if (request.user) {
+        filters.userId = filters.userId || request.user.id;
       }
 
+      const routeService = new RouteService(this.supabase);
       const routes = await routeService.getRoutes(filters);
 
-      return routes;
+      return reply.code(200).send(routes);
     } catch (error) {
-      request.log.error(error);
+      request.log.error('Error al listar rutas:', error);
+
       return reply.code(500).send({
         success: false,
-        message: error.message
+        message: 'Error al obtener las rutas: ' + error.message
       });
     }
   });
@@ -442,15 +488,19 @@ async function routeRoutes(fastify, options) {
   // Obtener una ruta específica
   fastify.get('/:id', {
     schema: schemas.getRoute,
-    preValidation: [fastify.authenticate]
-  }, async (request, reply) => {
+    // Quitamos la preValidation o usamos la que exista
+    // Si se necesita autenticación opcional, podemos adaptar el código
+    // para manejar usuarios no autenticados
+  }, async function (request, reply) {
     try {
-      const userId = request.user.id;
       const routeId = request.params.id;
+      // El usuario puede estar autenticado o no
+      const userId = request.user?.id || null;
 
-      const route = await routeService.getRouteDetail(routeId, userId);
+      const routeService = new RouteService(this.supabase);
+      const route = await routeService.getRouteById(routeId, userId);
 
-      return route;
+      return reply.code(200).send(route);
     } catch (error) {
       request.log.error(error);
 
@@ -470,7 +520,7 @@ async function routeRoutes(fastify, options) {
 
       return reply.code(500).send({
         success: false,
-        message: error.message
+        message: 'Error al obtener la ruta: ' + error.message
       });
     }
   });
@@ -479,26 +529,68 @@ async function routeRoutes(fastify, options) {
   fastify.post('/', {
     schema: schemas.createRoute,
     preValidation: [fastify.authenticate]
-  }, async (request, reply) => {
+  }, async function (request, reply) {
     try {
       const userId = request.user.id;
       const routeData = request.body;
 
-      const route = await routeService.createRoute(routeData, userId);
-
-      return reply.code(201).send({
-        success: true,
-        message: 'Ruta creada correctamente',
-        route: {
-          id: route.id,
-          title: route.title
-        }
+      console.log('Solicitud de creación de ruta recibida:', {
+        userId: userId,
+        tieneEsquema: routeData !== undefined,
+        lugares: routeData.places ? routeData.places.length : 0
       });
+
+      // Validar que haya al menos un lugar
+      if (!routeData.places || !Array.isArray(routeData.places) || routeData.places.length === 0) {
+        return reply.code(400).send({
+          success: false,
+          message: 'La ruta debe tener al menos un lugar'
+        });
+      }
+
+      // Validar que cada lugar tenga los campos mínimos necesarios
+      for (let i = 0; i < routeData.places.length; i++) {
+        const place = routeData.places[i];
+        if (!place.name) {
+          return reply.code(400).send({
+            success: false,
+            message: `El lugar en posición ${i} no tiene nombre`
+          });
+        }
+      }
+
+      // Convertir el formato de horarios si no está en JSONB
+      routeData.places = routeData.places.map(place => {
+        // Si schedule existe pero no tiene el formato correcto, intenta convertirlo
+        if (place.schedule && typeof place.schedule === 'object') {
+          // Asegurarnos de que cada día tiene formato correcto
+          ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
+            if (!place.schedule[day]) {
+              place.schedule[day] = { "open": "00:00", "close": "00:00" };
+            } else if (typeof place.schedule[day] === 'string') {
+              const [open, close] = place.schedule[day].split('-');
+              place.schedule[day] = { open, close };
+            }
+          });
+        }
+        return place;
+      });
+
+      const routeService = new RouteService(this.supabase);
+      const result = await routeService.createRoute(routeData, userId);
+
+      return reply.code(201).send(result);
     } catch (error) {
-      request.log.error(error);
-      return reply.code(400).send({
+      request.log.error('Error en ruta POST /routes:', error);
+
+      // Si ya está formateado como queremos
+      if (error.success === false && error.message) {
+        return reply.code(error.statusCode || 500).send(error);
+      }
+
+      return reply.code(500).send({
         success: false,
-        message: error.message
+        message: error.message || 'Error al crear la ruta'
       });
     }
   });
@@ -507,18 +599,16 @@ async function routeRoutes(fastify, options) {
   fastify.put('/:id', {
     schema: schemas.updateRoute,
     preValidation: [fastify.authenticate]
-  }, async (request, reply) => {
+  }, async function (request, reply) {
     try {
-      const userId = request.user.id;
       const routeId = request.params.id;
+      const userId = request.user.id;
       const routeData = request.body;
 
-      const updatedRoute = await routeService.updateRoute(routeId, routeData, userId);
+      const routeService = new RouteService(this.supabase);
+      const result = await routeService.updateRoute(routeId, routeData, userId);
 
-      return {
-        success: true,
-        message: 'Ruta actualizada correctamente'
-      };
+      return reply.code(200).send(result);
     } catch (error) {
       request.log.error(error);
 
@@ -536,9 +626,9 @@ async function routeRoutes(fastify, options) {
         });
       }
 
-      return reply.code(400).send({
+      return reply.code(500).send({
         success: false,
-        message: error.message
+        message: 'Error al actualizar la ruta: ' + error.message
       });
     }
   });
@@ -658,7 +748,7 @@ async function routeRoutes(fastify, options) {
       });
     }
   });
-  
+
   // Optimizar ruta (orden de visita de lugares)
   fastify.post('/optimizar', {
     schema: schemas.optimizeRoute,
@@ -666,20 +756,20 @@ async function routeRoutes(fastify, options) {
   }, async (request, reply) => {
     try {
       const { places, startPoint, hotel, days = 1, maxHoursPerDay = 8 } = request.body;
-      
+
       if (!places || places.length < 2) {
         return reply.code(400).send({
           success: false,
           message: 'Se requieren al menos 2 lugares para optimizar una ruta'
         });
       }
-      
+
       // Calcular distancias entre todos los puntos
       const distances = calculateDistanceMatrix(places, startPoint, hotel);
-      
+
       // Aplicar algoritmo del vecino más cercano para encontrar la ruta óptima
       let optimizedRoute;
-      
+
       if (days > 1) {
         // Si se especifican días, usar la versión del algoritmo con distribución por días
         optimizedRoute = findOptimalRouteWithDays(places, distances, startPoint, hotel, days, maxHoursPerDay);
@@ -687,7 +777,7 @@ async function routeRoutes(fastify, options) {
         // Usar el algoritmo original para un solo día
         optimizedRoute = findOptimalRoute(places, distances, startPoint, hotel);
       }
-      
+
       return {
         success: true,
         optimizedRoute
@@ -697,6 +787,98 @@ async function routeRoutes(fastify, options) {
       return reply.code(500).send({
         success: false,
         message: error.message
+      });
+    }
+  });
+
+  // GET /routes/:id/places - Obtener todos los lugares de una ruta específica
+  fastify.get('/:id/places', {
+    schema: {
+      description: 'Obtener todos los lugares de una ruta específica',
+      tags: ['rutas', 'lugares'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            routeId: { type: 'string' },
+            places: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  description: { type: 'string' },
+                  address: { type: 'string' },
+                  coordinates: { type: 'string' },
+                  rating: { type: 'number' },
+                  formatted_schedule: { type: 'string' },
+                  schedule: { type: 'object' },
+                  order_in_day: { type: 'integer' },
+                  day_number: { type: 'integer' },
+                  order_index: { type: 'integer' },
+                  photos: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        public_url: { type: 'string' },
+                        caption: { type: 'string' },
+                        order_index: { type: 'integer' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async function (request, reply) {
+    try {
+      const routeId = request.params.id;
+
+      // No es necesario autenticación, pero si hay un usuario logueado, usamos su ID
+      const userId = request.user?.id || null;
+
+      console.log(`Obteniendo lugares de la ruta ${routeId}`);
+
+      const routeService = new RouteService(this.supabase);
+      const { places } = await routeService.getPlacesFromRoute(routeId, userId);
+
+      return reply.code(200).send({
+        routeId,
+        places
+      });
+    } catch (error) {
+      request.log.error('Error al obtener lugares de la ruta:', error);
+
+      if (error.message === 'Ruta no encontrada') {
+        return reply.code(404).send({
+          success: false,
+          message: 'Ruta no encontrada'
+        });
+      }
+
+      if (error.message.includes('No tienes permiso')) {
+        return reply.code(403).send({
+          success: false,
+          message: error.message
+        });
+      }
+
+      return reply.code(500).send({
+        success: false,
+        message: `Error al obtener lugares de la ruta: ${error.message}`
       });
     }
   });
@@ -712,24 +894,24 @@ async function routeRoutes(fastify, options) {
 function calculateDistanceMatrix(places, startPoint = null, hotel = null) {
   // Si hay hotel, lo usamos como punto de inicio en lugar del startPoint
   const actualStartPoint = hotel ? hotel.coordinates : startPoint;
-  
+
   // Crear la lista completa de puntos
   const points = [];
-  
+
   // Añadir el punto de inicio si existe
   if (actualStartPoint) {
     points.push(actualStartPoint);
   }
-  
+
   // Añadir todos los lugares
   places.forEach(place => {
     points.push(place.coordinates);
   });
-  
+
   // Calcular la matriz de distancias
   const n = points.length;
   const distances = Array(n).fill().map(() => Array(n).fill(0));
-  
+
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       if (i !== j) {
@@ -737,7 +919,7 @@ function calculateDistanceMatrix(places, startPoint = null, hotel = null) {
       }
     }
   }
-  
+
   return distances;
 }
 
@@ -751,13 +933,13 @@ function calculateDistance(point1, point2) {
   const R = 6371; // Radio de la Tierra en km
   const dLat = toRad(point2.lat - point1.lat);
   const dLng = toRad(point2.lng - point1.lng);
-  
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(toRad(point1.lat)) * Math.cos(toRad(point2.lat)) * 
-    Math.sin(dLng/2) * Math.sin(dLng/2);
-  
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(point1.lat)) * Math.cos(toRad(point2.lat)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
@@ -787,10 +969,10 @@ function calculateTravelTime(distance, speedKmH = 50) {
  */
 function timeToMinutes(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return 0;
-  
+
   const match = timeStr.match(/(\d{1,2}):(\d{2})/);
   if (!match) return 0;
-  
+
   const [_, hours, minutes] = match;
   return parseInt(hours) * 60 + parseInt(minutes);
 }
@@ -819,77 +1001,77 @@ function parseOpeningHours(openingHours, dayOfWeek, timeInMinutes) {
   if (!openingHours) {
     return { isOpen: true, openTime: 0, closeTime: 24 * 60 - 1 };
   }
-  
+
   // Objetos para mapear días en español
   const dayMap = {
-    'lunes': 1, 'martes': 2, 'miércoles': 3, 'miercoles': 3, 'jueves': 4, 
+    'lunes': 1, 'martes': 2, 'miércoles': 3, 'miercoles': 3, 'jueves': 4,
     'viernes': 5, 'sábado': 6, 'sabado': 6, 'domingo': 0, 'all': -1
   };
-  
+
   // Número del día actual (0: domingo, 1: lunes, ..., 6: sábado)
   const currentDayNum = dayMap[dayOfWeek.toLowerCase()];
   if (currentDayNum === undefined) {
     return { isOpen: true, openTime: 0, closeTime: 24 * 60 - 1 };
   }
-  
+
   // Caso 1: openingHours es un objeto con la estructura esperada
   if (typeof openingHours === 'object' && openingHours.weekdays) {
     const weekdays = openingHours.weekdays;
-    
+
     // Verificar cada regla de días de la semana
     for (const dayRange in weekdays) {
       const timeRange = weekdays[dayRange];
-      
+
       // Si está cerrado este día
       if (timeRange.toLowerCase() === 'cerrado') {
         continue;
       }
-      
+
       // Si es para todos los días
       if (dayRange === 'all') {
         // Extraer horarios de apertura y cierre
         const [openTime, closeTime] = timeRange.split('-');
         const openMinutes = timeToMinutes(openTime);
         const closeMinutes = timeToMinutes(closeTime);
-        
+
         // Verificar si la hora actual está dentro del horario
         const isOpenNow = timeInMinutes >= openMinutes && timeInMinutes < closeMinutes;
-        return { 
-          isOpen: isOpenNow, 
-          openTime: openMinutes, 
+        return {
+          isOpen: isOpenNow,
+          openTime: openMinutes,
           closeTime: closeMinutes,
           dayRange: 'todos los días'
         };
       }
-      
+
       // Verificar rangos de días como "lunes-viernes"
       const rangeParts = dayRange.split('-');
       if (rangeParts.length === 2) {
         const startDay = dayMap[rangeParts[0].toLowerCase()];
         const endDay = dayMap[rangeParts[1].toLowerCase()];
-        
+
         if (startDay !== undefined && endDay !== undefined) {
           // Comprobar si el día actual está en el rango
           let isDayInRange = false;
-          
+
           if (startDay <= endDay) {
             isDayInRange = currentDayNum >= startDay && currentDayNum <= endDay;
           } else {
             // Rango que cruza la semana (ej: "Viernes a Lunes")
             isDayInRange = currentDayNum >= startDay || currentDayNum <= endDay;
           }
-          
+
           if (isDayInRange) {
             // Extraer horarios de apertura y cierre
             const [openTime, closeTime] = timeRange.split('-');
             const openMinutes = timeToMinutes(openTime);
             const closeMinutes = timeToMinutes(closeTime);
-            
+
             // Verificar si la hora actual está dentro del horario
             const isOpenNow = timeInMinutes >= openMinutes && timeInMinutes < closeMinutes;
-            return { 
-              isOpen: isOpenNow, 
-              openTime: openMinutes, 
+            return {
+              isOpen: isOpenNow,
+              openTime: openMinutes,
               closeTime: closeMinutes,
               dayRange: dayRange
             };
@@ -901,67 +1083,67 @@ function parseOpeningHours(openingHours, dayOfWeek, timeInMinutes) {
         const [openTime, closeTime] = timeRange.split('-');
         const openMinutes = timeToMinutes(openTime);
         const closeMinutes = timeToMinutes(closeTime);
-        
+
         // Verificar si la hora actual está dentro del horario
         const isOpenNow = timeInMinutes >= openMinutes && timeInMinutes < closeMinutes;
-        return { 
-          isOpen: isOpenNow, 
-          openTime: openMinutes, 
+        return {
+          isOpen: isOpenNow,
+          openTime: openMinutes,
           closeTime: closeMinutes,
           dayRange: dayRange
         };
       }
     }
-    
+
     // Si no se encuentra ninguna regla aplicable, asumir cerrado
     return { isOpen: false, openTime: null, closeTime: null };
   }
-  
+
   // Caso 2: openingHours es una cadena de texto (formato antiguo)
   if (typeof openingHours === 'string') {
     const openingHoursText = openingHours;
-    
+
     // Texto indica abierto 24h
-    if (openingHoursText.toLowerCase().includes('abierto 24h') || 
-        openingHoursText.toLowerCase().includes('24 horas')) {
+    if (openingHoursText.toLowerCase().includes('abierto 24h') ||
+      openingHoursText.toLowerCase().includes('24 horas')) {
       return { isOpen: true, openTime: 0, closeTime: 24 * 60 - 1 };
     }
-    
+
     // Dividir por líneas o comas para procesar diferentes rangos de días
     const lines = openingHoursText.split(/\n|<br>|,/);
-    
+
     for (const line of lines) {
       // Buscar patrones como "Lunes a Viernes: 10:00-19:00"
       const rangeMatch = line.match(/([^:]+):\s*(\d{1,2}:\d{2})-(\d{1,2}:\d{2})/i);
-      
+
       if (rangeMatch) {
         const [_, dayRange, openTime, closeTime] = rangeMatch;
         const openMinutes = timeToMinutes(openTime);
         const closeMinutes = timeToMinutes(closeTime);
-        
+
         // Determinar si el día actual está en el rango
         const rangeParts = dayRange.split(/\s+a\s+/i);
         if (rangeParts.length === 2) {
           const startDay = dayMap[rangeParts[0].toLowerCase()];
           const endDay = dayMap[rangeParts[1].toLowerCase()];
-          
+
           if (startDay !== undefined && endDay !== undefined) {
             // Comprobar si el día actual está en el rango
             let isDayInRange = false;
-            
+
             if (startDay <= endDay) {
               isDayInRange = currentDayNum >= startDay && currentDayNum <= endDay;
             } else {
               // Rango que cruza la semana (ej: "Viernes a Lunes")
               isDayInRange = currentDayNum >= startDay || currentDayNum <= endDay;
             }
-            
+
             if (isDayInRange) {
               // Verificar si la hora actual está dentro del horario de apertura
               const isOpenNow = timeInMinutes >= openMinutes && timeInMinutes < closeMinutes;
-              return { 
-                isOpen: isOpenNow, 
-                openTime: openMinutes, 
+              return {
+                isOpen: isOpenNow,
+                openTime: openMinutes,
                 closeTime: closeMinutes,
                 dayRange: dayRange.trim()
               };
@@ -970,9 +1152,9 @@ function parseOpeningHours(openingHours, dayOfWeek, timeInMinutes) {
         } else if (dayRange.toLowerCase().includes(dayOfWeek.toLowerCase())) {
           // Un día específico
           const isOpenNow = timeInMinutes >= openMinutes && timeInMinutes < closeMinutes;
-          return { 
-            isOpen: isOpenNow, 
-            openTime: openMinutes, 
+          return {
+            isOpen: isOpenNow,
+            openTime: openMinutes,
             closeTime: closeMinutes,
             dayRange: dayRange.trim()
           };
@@ -980,7 +1162,7 @@ function parseOpeningHours(openingHours, dayOfWeek, timeInMinutes) {
       }
     }
   }
-  
+
   // Si no se encuentra un horario específico para el día actual, asumir cerrado
   return { isOpen: false, openTime: null, closeTime: null };
 }
@@ -994,22 +1176,22 @@ function parseOpeningHours(openingHours, dayOfWeek, timeInMinutes) {
  */
 function findFirstAvailableTime(openingHours, dayOfWeek, preferredTimeMinutes) {
   const hourInfo = parseOpeningHours(openingHours, dayOfWeek, preferredTimeMinutes);
-  
+
   if (hourInfo.openTime === null) {
     // Lugar cerrado todo el día
     return null;
   }
-  
+
   // Si la hora preferida es antes de la apertura, usar la hora de apertura
   if (preferredTimeMinutes < hourInfo.openTime) {
     return hourInfo.openTime;
   }
-  
+
   // Si la hora preferida es después del cierre, no se puede visitar ese día
   if (preferredTimeMinutes >= hourInfo.closeTime) {
     return null;
   }
-  
+
   // Usar la hora preferida si está dentro del horario de apertura
   return preferredTimeMinutes;
 }
@@ -1038,37 +1220,37 @@ function getDayOfWeek(dayOffset = 0) {
 function findOptimalRoute(places, distances, startPoint = null, hotel = null) {
   // Usar hotel como punto de inicio si está definido
   const hasStartingPoint = startPoint || hotel;
-  
+
   // Agrupar lugares por proximidad geográfica antes de optimizar
   const clusters = groupPlacesByProximity(places);
-  
+
   // Índice de inicio (0 si hay punto de inicio, cualquier punto si no hay)
   const offset = hasStartingPoint ? 1 : 0;
-  
+
   // Array de índices para la ruta final
   let route = [];
-  
+
   // Ordenar clusters por distancia al punto de inicio o al primer cluster
   const orderedClusters = orderClustersByProximity(clusters, distances, hasStartingPoint ? 0 : null);
-  
+
   // Construir la ruta respetando los clusters (grupos de proximidad)
   for (const cluster of orderedClusters) {
     // Optimizar internamente cada cluster
     const clusterRoute = optimizeCluster(cluster, distances, route.length > 0 ? route[route.length - 1] : (hasStartingPoint ? 0 : null), offset);
-    
+
     // Añadir la ruta optimizada del cluster a la ruta global
     route = [...route, ...clusterRoute];
   }
-  
+
   // Aplicar optimización 2-opt a toda la ruta para mejorar globalmente
   route = twoOptOptimization(route, distances, offset);
-  
+
   // Construir la ruta final con todos los datos de los lugares
   const optimizedRoute = route.map((placeIndex, index) => ({
     ...places[placeIndex],
     order_index: index
   }));
-  
+
   return optimizedRoute;
 }
 
@@ -1082,11 +1264,11 @@ function groupPlacesByProximity(places) {
   if (places.length <= 4) {
     return [places.map((_, i) => i)];
   }
-  
+
   // Calcular matriz de distancias entre todos los lugares
   const n = places.length;
   const distMatrix = Array(n).fill().map(() => Array(n).fill(0));
-  
+
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const dist = calculateDistance(places[i].coordinates, places[j].coordinates);
@@ -1094,7 +1276,7 @@ function groupPlacesByProximity(places) {
       distMatrix[j][i] = dist;
     }
   }
-  
+
   // Umbral de distancia para considerar lugares como "cercanos"
   // Usamos un percentil bajo de todas las distancias para determinar automáticamente
   let allDistances = [];
@@ -1104,47 +1286,47 @@ function groupPlacesByProximity(places) {
     }
   }
   allDistances.sort((a, b) => a - b);
-  
+
   // Usar el percentil 25 como umbral de proximidad
   const proximityThreshold = allDistances[Math.floor(allDistances.length * 0.25)];
-  
+
   // Implementación simplificada de DBSCAN para clustering
   const visited = Array(n).fill(false);
   const clusters = [];
-  
+
   for (let i = 0; i < n; i++) {
     if (visited[i]) continue;
-    
+
     visited[i] = true;
     const cluster = [i];
     const neighbors = [];
-    
+
     for (let j = 0; j < n; j++) {
       if (i !== j && distMatrix[i][j] <= proximityThreshold) {
         neighbors.push(j);
       }
     }
-    
+
     while (neighbors.length > 0) {
       const current = neighbors.pop();
       if (visited[current]) continue;
-      
+
       visited[current] = true;
       cluster.push(current);
-      
+
       for (let j = 0; j < n; j++) {
         if (!visited[j] && distMatrix[current][j] <= proximityThreshold) {
           neighbors.push(j);
         }
       }
     }
-    
+
     // Añadir cluster solo si tiene al menos un elemento
     if (cluster.length > 0) {
       clusters.push(cluster);
     }
   }
-  
+
   // Asignar lugares no agrupados al cluster más cercano
   for (let i = 0; i < n; i++) {
     let assigned = false;
@@ -1154,11 +1336,11 @@ function groupPlacesByProximity(places) {
         break;
       }
     }
-    
+
     if (!assigned) {
       let minDistance = Infinity;
       let closestCluster = 0;
-      
+
       for (let c = 0; c < clusters.length; c++) {
         const cluster = clusters[c];
         for (const placeIdx of cluster) {
@@ -1168,11 +1350,11 @@ function groupPlacesByProximity(places) {
           }
         }
       }
-      
+
       clusters[closestCluster].push(i);
     }
   }
-  
+
   // Asegurar que cada lugar está asignado a exactamente un cluster
   const allAssigned = new Set();
   for (const cluster of clusters) {
@@ -1180,7 +1362,7 @@ function groupPlacesByProximity(places) {
       allAssigned.add(idx);
     }
   }
-  
+
   // Si no se han asignado todos los lugares, crear un cluster con los faltantes
   if (allAssigned.size < n) {
     const missing = [];
@@ -1193,7 +1375,7 @@ function groupPlacesByProximity(places) {
       clusters.push(missing);
     }
   }
-  
+
   return clusters;
 }
 
@@ -1206,20 +1388,20 @@ function groupPlacesByProximity(places) {
  */
 function orderClustersByProximity(clusters, distances, startIdx) {
   if (clusters.length <= 1) return clusters;
-  
+
   // Calcular "centroide" (promedio) de cada cluster
   const centroids = clusters.map(cluster => {
     const sum = cluster.reduce((acc, idx) => acc + idx, 0);
     return sum / cluster.length;
   });
-  
+
   // Orden de los clusters
   const orderedClusters = [];
   const visited = Array(clusters.length).fill(false);
-  
+
   // Índice del primer cluster (el más cercano al punto inicial si existe)
   let currentIdx;
-  
+
   if (startIdx !== null) {
     // Comenzar con el cluster más cercano al punto inicial
     let minDist = Infinity;
@@ -1237,19 +1419,19 @@ function orderClustersByProximity(clusters, distances, startIdx) {
     // Comenzar con cualquier cluster
     currentIdx = 0;
   }
-  
+
   // Añadir el primer cluster
   visited[currentIdx] = true;
   orderedClusters.push(clusters[currentIdx]);
-  
+
   // Ordenar el resto de clusters por proximidad
   while (orderedClusters.length < clusters.length) {
     let nextIdx = -1;
     let minDist = Infinity;
-    
+
     // Último cluster añadido
     const lastCluster = orderedClusters[orderedClusters.length - 1];
-    
+
     for (let i = 0; i < clusters.length; i++) {
       if (!visited[i]) {
         // Calcular distancia mínima entre cualquier lugar del último cluster y este
@@ -1264,7 +1446,7 @@ function orderClustersByProximity(clusters, distances, startIdx) {
         }
       }
     }
-    
+
     if (nextIdx !== -1) {
       visited[nextIdx] = true;
       orderedClusters.push(clusters[nextIdx]);
@@ -1279,7 +1461,7 @@ function orderClustersByProximity(clusters, distances, startIdx) {
       }
     }
   }
-  
+
   return orderedClusters;
 }
 
@@ -1293,11 +1475,11 @@ function orderClustersByProximity(clusters, distances, startIdx) {
  */
 function optimizeCluster(cluster, distances, prevIdx, offset) {
   if (cluster.length <= 1) return cluster;
-  
+
   // Usar algoritmo del vecino más cercano dentro del cluster
   const visited = Array(cluster.length).fill(false);
   const route = [];
-  
+
   // Determinar el punto de inicio dentro del cluster (el más cercano al punto anterior)
   let startIdx = 0;
   if (prevIdx !== null) {
@@ -1310,17 +1492,17 @@ function optimizeCluster(cluster, distances, prevIdx, offset) {
       }
     }
   }
-  
+
   // Comenzar con el punto inicial
   let currentIdx = startIdx;
   visited[currentIdx] = true;
   route.push(cluster[currentIdx]);
-  
+
   // Completar la ruta con el vecino más cercano
   while (route.length < cluster.length) {
     let nextIdx = -1;
     let minDist = Infinity;
-    
+
     for (let i = 0; i < cluster.length; i++) {
       if (!visited[i]) {
         const dist = distances[cluster[currentIdx]][cluster[i]];
@@ -1330,7 +1512,7 @@ function optimizeCluster(cluster, distances, prevIdx, offset) {
         }
       }
     }
-    
+
     if (nextIdx !== -1) {
       visited[nextIdx] = true;
       route.push(cluster[nextIdx]);
@@ -1339,7 +1521,7 @@ function optimizeCluster(cluster, distances, prevIdx, offset) {
       break; // No debería ocurrir
     }
   }
-  
+
   // Optimizar con 2-opt dentro del cluster
   if (route.length > 2) {
     // Ajustar para usar indices reales, no los del cluster
@@ -1347,39 +1529,39 @@ function optimizeCluster(cluster, distances, prevIdx, offset) {
     for (let i = 0; i < route.length; i++) {
       routeIndices[i] = route[i];
     }
-    
+
     // Aplicar 2-opt dentro del cluster
     let improved = true;
     let iterations = 0;
     const maxIterations = 50;
-    
+
     while (improved && iterations < maxIterations) {
       improved = false;
       iterations++;
-      
+
       for (let i = 0; i < routeIndices.length - 2; i++) {
         for (let j = i + 2; j < routeIndices.length; j++) {
-          const currDist = distances[routeIndices[i]][routeIndices[i+1]] + 
-                          distances[routeIndices[j-1]][routeIndices[j]];
-          
-          const newDist = distances[routeIndices[i]][routeIndices[j-1]] + 
-                         distances[routeIndices[i+1]][routeIndices[j]];
-          
+          const currDist = distances[routeIndices[i]][routeIndices[i + 1]] +
+            distances[routeIndices[j - 1]][routeIndices[j]];
+
+          const newDist = distances[routeIndices[i]][routeIndices[j - 1]] +
+            distances[routeIndices[i + 1]][routeIndices[j]];
+
           if (newDist < currDist) {
             // Invertir segmento
-            routeIndices.splice(i+1, j-i-1, ...routeIndices.slice(i+1, j).reverse());
+            routeIndices.splice(i + 1, j - i - 1, ...routeIndices.slice(i + 1, j).reverse());
             improved = true;
             break;
           }
         }
-        
+
         if (improved) break;
       }
     }
-    
+
     return routeIndices;
   }
-  
+
   return route;
 }
 
@@ -1395,25 +1577,25 @@ function twoOptOptimization(route, distances, offset) {
   let bestDistance = calculateRouteDistance(route, distances, offset);
   let iterations = 0;
   const maxIterations = 100; // Evitar bucles infinitos
-  
+
   while (improved && iterations < maxIterations) {
     improved = false;
     iterations++;
-    
+
     for (let i = 0; i < route.length - 2; i++) {
       for (let j = i + 2; j < route.length; j++) {
         // No invertir si los extremos son el inicio y el final
         if (i === 0 && j === route.length - 1) continue;
-        
+
         // Crear una nueva ruta invirtiendo el segmento entre i y j
         const newRoute = [...route];
         // Invertir segmento
         const segment = newRoute.slice(i + 1, j + 1).reverse();
         newRoute.splice(i + 1, j - i, ...segment);
-        
+
         // Calcular la distancia de la nueva ruta
         const newDistance = calculateRouteDistance(newRoute, distances, offset);
-        
+
         // Si la nueva ruta es mejor, reemplazar la actual
         if (newDistance < bestDistance) {
           route = newRoute;
@@ -1425,7 +1607,7 @@ function twoOptOptimization(route, distances, offset) {
       if (improved) break;
     }
   }
-  
+
   return route;
 }
 
@@ -1438,13 +1620,13 @@ function twoOptOptimization(route, distances, offset) {
  */
 function calculateRouteDistance(route, distances, offset) {
   let totalDistance = 0;
-  
+
   for (let i = 0; i < route.length - 1; i++) {
     const from = route[i] + offset;
     const to = route[i + 1] + offset;
     totalDistance += distances[from][to];
   }
-  
+
   return totalDistance;
 }
 
@@ -1462,12 +1644,12 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
   // Si solo hay un día, usa el algoritmo original
   if (days <= 1 || places.length <= days) {
     const optimizedRoute = findOptimalRoute(places, distances, startPoint, hotel);
-    
+
     // Asignar día 1 y calcular tiempos
     const dayOfWeek = getDayOfWeek(0); // hoy
     let currentTime = timeToMinutes('09:00');
     let prevCoords = hotel ? hotel.coordinates : (startPoint || null);
-    
+
     return optimizedRoute.map(place => {
       // Calcular tiempo de viaje
       let travelTime = 0;
@@ -1475,24 +1657,24 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
         const distance = calculateDistance(prevCoords, place.coordinates);
         travelTime = calculateTravelTime(distance) * 60;
       }
-      
+
       // Ajustar por hora de apertura
       let arrivalTime = currentTime + travelTime;
       const availableTime = findFirstAvailableTime(place.openingHours, dayOfWeek, arrivalTime);
-      
+
       // Si no hay hora disponible, usar 09:00 del día siguiente
       if (availableTime === null) {
         arrivalTime = timeToMinutes('09:00');
       } else {
         arrivalTime = availableTime;
       }
-      
+
       const departureTime = arrivalTime + ((place.visitDuration || 1) * 60);
-      
+
       // Actualizar para el siguiente lugar
       currentTime = departureTime;
       prevCoords = place.coordinates;
-      
+
       return {
         ...place,
         day: 1,
@@ -1504,11 +1686,11 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
 
   // Información del hotel
   const hotelCoordinates = hotel ? hotel.coordinates : null;
-  
+
   // 1. OPTIMIZAR GLOBALMENTE TODOS LOS LUGARES POR PROXIMIDAD
   // Primero agrupamos lugares cercanos en clusters
   const clusters = groupPlacesByProximity(places);
-  
+
   // Calculamos matriz de distancias entre lugares
   const locationsDistances = [];
   for (let i = 0; i < places.length; i++) {
@@ -1517,69 +1699,69 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
       locationsDistances[i][j] = calculateDistance(places[i].coordinates, places[j].coordinates);
     }
   }
-  
+
   // Ordenamos clusters por proximidad
   const orderedClusters = orderClustersByProximity(clusters, distances, hotelCoordinates ? 0 : null);
-  
+
   // 2. CREAR UNA SECUENCIA INICIAL BASADA EN CLUSTERS
   let initialSequence = [];
-  
+
   // Aplanar los clusters manteniendo juntos los lugares cercanos
   for (const cluster of orderedClusters) {
     // Optimizar el orden dentro de cada cluster
     const optimizedCluster = optimizeClusterOrder(cluster, locationsDistances, places);
     initialSequence = [...initialSequence, ...optimizedCluster];
   }
-  
+
   // 3. AJUSTAR LA SECUENCIA PARA LUGARES ESENCIALES
   // Mover lugares esenciales hacia el principio manteniendo la coherencia geográfica
   const essentialPlaces = initialSequence.filter(idx => places[idx].isEssential);
   const nonEssentialPlaces = initialSequence.filter(idx => !places[idx].isEssential);
-  
+
   // Si hay lugares esenciales, priorizarlos pero manteniendo su orden geográfico
   if (essentialPlaces.length > 0) {
     // Calcular cuántos lugares esenciales incluir cada día (distribución equitativa)
     const essentialPerDay = Math.ceil(essentialPlaces.length / days);
-    
+
     // Redistribuir los lugares manteniendo esenciales al principio con coherencia geográfica
     initialSequence = distributeEssentialPlaces(essentialPlaces, nonEssentialPlaces, essentialPerDay, locationsDistances);
   }
-  
+
   // 4. DISTRIBUIR EN DÍAS RESPETANDO LA SECUENCIA DE PROXIMIDAD
   const dayRoutes = [];
   let currentDay = 1;
   let currentDayMinutes = timeToMinutes('09:00');
   let currentDayPlaces = [];
   let dailyDuration = 0;
-  
+
   // Información para calcular tiempos
   const dailyStartTime = timeToMinutes('09:00');
   const maxDayMinutes = maxHoursPerDay * 60;
   let previousCoords = hotelCoordinates || (startPoint ? startPoint : null);
-  
+
   // Posponer lugares si tienen problemas de horario o no caben en el día
   const postponedPlaces = [];
-  
+
   // Distribuir los lugares en días respetando la secuencia optimizada
   for (let i = 0; i < initialSequence.length; i++) {
     const placeIndex = initialSequence[i];
     const place = places[placeIndex];
     const visitDuration = (place.visitDuration || 1) * 60;
     const dayOfWeek = getDayOfWeek(currentDay - 1);
-    
+
     // Calcular tiempo de viaje desde punto anterior
     let travelMinutes = 0;
     if (previousCoords) {
       const distance = calculateDistance(previousCoords, place.coordinates);
       travelMinutes = calculateTravelTime(distance) * 60;
     }
-    
+
     // Calcular tiempo estimado de llegada
     let arrivalTime = currentDayMinutes + travelMinutes;
-    
+
     // Ajustar por horarios de apertura
     const availableTime = findFirstAvailableTime(place.openingHours, dayOfWeek, arrivalTime);
-    
+
     // Si no hay hora disponible este día
     if (availableTime === null) {
       if (place.isEssential) {
@@ -1589,22 +1771,22 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
           const reoptimizedDay = reoptimizeDayByProximity(currentDayPlaces, locationsDistances);
           dayRoutes.push(reoptimizedDay);
         }
-        
+
         // Configurar para nuevo día
         currentDay++;
         currentDayPlaces = [];
         currentDayMinutes = dailyStartTime;
         dailyDuration = 0;
-        
+
         // Comprobar horario en el nuevo día
         const nextDayOfWeek = getDayOfWeek(currentDay - 1);
         const newAvailableTime = findFirstAvailableTime(place.openingHours, nextDayOfWeek, dailyStartTime);
-        
+
         if (newAvailableTime !== null) {
           // Si está disponible el nuevo día, añadirlo
           arrivalTime = newAvailableTime;
           const departureTime = arrivalTime + visitDuration;
-          
+
           currentDayPlaces.push({
             ...place,
             originalIndex: placeIndex,
@@ -1613,7 +1795,7 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
             estimatedArrival: minutesToTime(arrivalTime),
             estimatedDeparture: minutesToTime(departureTime)
           });
-          
+
           currentDayMinutes = departureTime;
           dailyDuration += visitDuration + travelMinutes;
           previousCoords = place.coordinates;
@@ -1626,17 +1808,17 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
         // Si no es esencial, posponer
         postponedPlaces.push(placeIndex);
       }
-      
+
       continue;
     }
-    
+
     // Actualizar tiempo con la primera hora disponible
     arrivalTime = availableTime;
     const departureTime = arrivalTime + visitDuration;
-    
+
     // Comprobar si este lugar cabe en el día actual
     const additionalTime = visitDuration + travelMinutes;
-    
+
     if (place.isEssential || dailyDuration + additionalTime <= maxDayMinutes) {
       // Añadir al día actual
       currentDayPlaces.push({
@@ -1647,7 +1829,7 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
         estimatedArrival: minutesToTime(arrivalTime),
         estimatedDeparture: minutesToTime(departureTime)
       });
-      
+
       currentDayMinutes = departureTime;
       dailyDuration += additionalTime;
       previousCoords = place.coordinates;
@@ -1655,13 +1837,13 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
       // Reoptimizar el orden del día actual según proximidad
       const reoptimizedDay = reoptimizeDayByProximity(currentDayPlaces, locationsDistances);
       dayRoutes.push(reoptimizedDay);
-      
+
       // Configurar para nuevo día
       currentDay++;
       currentDayPlaces = [];
       currentDayMinutes = dailyStartTime;
       dailyDuration = 0;
-      
+
       if (hotelCoordinates) {
         previousCoords = hotelCoordinates;
         const distanceFromHotel = calculateDistance(hotelCoordinates, place.coordinates);
@@ -1670,16 +1852,16 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
         previousCoords = startPoint ? startPoint : null;
         travelMinutes = 0;
       }
-      
+
       // Comprobar disponibilidad en el nuevo día
       const nextDayOfWeek = getDayOfWeek(currentDay - 1);
       const newAvailableTime = findFirstAvailableTime(place.openingHours, nextDayOfWeek, dailyStartTime + travelMinutes);
-      
+
       if (newAvailableTime !== null) {
         // Añadir al nuevo día
         arrivalTime = newAvailableTime;
         const newDepartureTime = arrivalTime + visitDuration;
-        
+
         currentDayPlaces.push({
           ...place,
           originalIndex: placeIndex,
@@ -1688,7 +1870,7 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
           estimatedArrival: minutesToTime(arrivalTime),
           estimatedDeparture: minutesToTime(newDepartureTime)
         });
-        
+
         currentDayMinutes = newDepartureTime;
         dailyDuration += visitDuration + travelMinutes;
         previousCoords = place.coordinates;
@@ -1698,14 +1880,14 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
       }
     }
   }
-  
+
   // Añadir el último día si tiene lugares
   if (currentDayPlaces.length > 0) {
     // Reoptimizar el orden del último día según proximidad
     const reoptimizedDay = reoptimizeDayByProximity(currentDayPlaces, locationsDistances);
     dayRoutes.push(reoptimizedDay);
   }
-  
+
   // 5. REDISTRIBUIR LUGARES POSPUESTOS
   if (postponedPlaces.length > 0) {
     // Ordenar días por carga de trabajo
@@ -1713,35 +1895,35 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
       dayIndex: index,
       load: day.reduce((sum, place) => sum + (place.visitDuration || 1), 0)
     }));
-    
+
     dayLoads.sort((a, b) => a.load - b.load);
-    
+
     // Intentar añadir lugares pospuestos
     for (const placeIndex of postponedPlaces) {
       const place = places[placeIndex];
-      
+
       // Encontrar el día con menos carga que puede acomodar este lugar
       for (const dayLoad of dayLoads) {
         const dayIndex = dayLoad.dayIndex;
         const day = dayRoutes[dayIndex];
         const currentDayTotal = dayLoad.load;
-        
+
         // Si cabe en este día, añadirlo
         if (currentDayTotal + (place.visitDuration || 1) <= maxHoursPerDay) {
           // Encontrar la mejor posición dentro del día (cerca del lugar más cercano)
           let bestPosition = 0;
           let minDistance = Infinity;
-          
+
           for (let i = 0; i < day.length; i++) {
             const existingPlace = day[i];
             const distance = calculateDistance(place.coordinates, existingPlace.coordinates);
-            
+
             if (distance < minDistance) {
               minDistance = distance;
               bestPosition = i;
             }
           }
-          
+
           // Insertar en la posición óptima
           const newPlace = {
             ...place,
@@ -1750,16 +1932,16 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
             estimatedArrival: "09:00", // Tiempo aproximado, se recalculará después
             estimatedDeparture: "10:00"
           };
-          
+
           // Insertar en la posición más cercana
           day.splice(bestPosition + 1, 0, newPlace);
-          
+
           // Actualizar la carga del día
           dayLoad.load += (place.visitDuration || 1);
-          
+
           // Reordenar la lista de cargas
           dayLoads.sort((a, b) => a.load - b.load);
-          
+
           // Reoptimizar este día de nuevo
           dayRoutes[dayIndex] = reoptimizeDayByProximity(day, locationsDistances);
           break;
@@ -1767,7 +1949,7 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
       }
     }
   }
-  
+
   // 6. AJUSTAR A LA CANTIDAD DE DÍAS DISPONIBLES
   if (dayRoutes.length > days) {
     // Fusionar días hasta tener el número correcto
@@ -1775,12 +1957,12 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
       // Encontrar los dos días consecutivos con lugares más cercanos entre sí
       let minDistance = Infinity;
       let daysToMerge = [0, 1];
-      
+
       for (let i = 0; i < dayRoutes.length - 1; i++) {
         for (let j = i + 1; j < dayRoutes.length; j++) {
           const day1 = dayRoutes[i];
           const day2 = dayRoutes[j];
-          
+
           // Encontrar la distancia mínima entre cualquier par de lugares
           for (const place1 of day1) {
             for (const place2 of day2) {
@@ -1793,77 +1975,77 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
           }
         }
       }
-      
+
       // Fusionar los dos días más cercanos
       const [day1Index, day2Index] = daysToMerge;
       const mergedPlaces = [...dayRoutes[day1Index], ...dayRoutes[day2Index]];
-      
+
       // Optimizar el orden del día fusionado
       const reoptimizedMerged = reoptimizeDayByProximity(mergedPlaces, locationsDistances);
-      
+
       // Reemplazar el primer día con el fusionado y eliminar el segundo
       dayRoutes[day1Index] = reoptimizedMerged;
       dayRoutes.splice(day2Index, 1);
     }
   }
-  
+
   // 7. RECALCULAR TIEMPOS Y CREAR RESULTADO FINAL
   const finalRoute = [];
-  
+
   for (let dayIndex = 0; dayIndex < dayRoutes.length; dayIndex++) {
     const dayNumber = dayIndex + 1;
     const dayPlaces = dayRoutes[dayIndex];
     const dayOfWeek = getDayOfWeek(dayIndex);
-    
+
     // Recalcular tiempos para este día
     let dayTime = dailyStartTime;
     let prevCoords = hotelCoordinates || (startPoint ? startPoint : null);
-    
+
     for (let j = 0; j < dayPlaces.length; j++) {
       const place = dayPlaces[j];
-      
+
       // Actualizar día y orden
       place.day = dayNumber;
       place.order_index = j;
       place.dayOfWeek = dayOfWeek;
-      
+
       // Recalcular tiempo de llegada
       if (prevCoords) {
         const distance = calculateDistance(prevCoords, place.coordinates);
         const travelTime = calculateTravelTime(distance) * 60;
         dayTime += travelTime;
       }
-      
+
       // Ajustar por horario de apertura
       const availableTime = findFirstAvailableTime(place.openingHours, dayOfWeek, dayTime);
-      
+
       if (availableTime !== null) {
         dayTime = availableTime;
       }
-      
+
       // Actualizar tiempos
       const visitDuration = (place.visitDuration || 1) * 60;
       place.estimatedArrival = minutesToTime(dayTime);
       place.estimatedDeparture = minutesToTime(dayTime + visitDuration);
-      
+
       // Avanzar tiempo y actualizar coordenadas
       dayTime += visitDuration;
       prevCoords = place.coordinates;
-      
+
       // Eliminar propiedades temporales
       delete place.originalIndex;
-      
+
       // Añadir al resultado final
       finalRoute.push(place);
     }
   }
-  
+
   // Ordenar por día y luego por order_index
   finalRoute.sort((a, b) => {
     if (a.day !== b.day) return a.day - b.day;
     return a.order_index - b.order_index;
   });
-  
+
   return finalRoute;
 }
 
@@ -1876,11 +2058,11 @@ function findOptimalRouteWithDays(places, distances, startPoint = null, hotel = 
  */
 function optimizeClusterOrder(cluster, distances, places) {
   if (cluster.length <= 1) return cluster;
-  
+
   // Ordenar el cluster por orden de "vecino más cercano"
   const visited = Array(cluster.length).fill(false);
   const orderedCluster = [];
-  
+
   // Comenzar con cualquier lugar (preferiblemente esencial si hay)
   let startIdx = 0;
   for (let i = 0; i < cluster.length; i++) {
@@ -1889,16 +2071,16 @@ function optimizeClusterOrder(cluster, distances, places) {
       break;
     }
   }
-  
+
   let currentIdx = startIdx;
   visited[currentIdx] = true;
   orderedCluster.push(cluster[currentIdx]);
-  
+
   // Completar la ruta con vecinos más cercanos
   while (orderedCluster.length < cluster.length) {
     let nextIdx = -1;
     let minDist = Infinity;
-    
+
     for (let i = 0; i < cluster.length; i++) {
       if (!visited[i]) {
         const dist = distances[cluster[currentIdx]][cluster[i]];
@@ -1908,7 +2090,7 @@ function optimizeClusterOrder(cluster, distances, places) {
         }
       }
     }
-    
+
     if (nextIdx !== -1) {
       visited[nextIdx] = true;
       orderedCluster.push(cluster[nextIdx]);
@@ -1917,7 +2099,7 @@ function optimizeClusterOrder(cluster, distances, places) {
       break; // No debería ocurrir
     }
   }
-  
+
   return orderedCluster;
 }
 
@@ -1932,15 +2114,15 @@ function optimizeClusterOrder(cluster, distances, places) {
 function distributeEssentialPlaces(essentialPlaces, nonEssentialPlaces, essentialPerDay, distances) {
   if (essentialPlaces.length === 0) return nonEssentialPlaces;
   if (nonEssentialPlaces.length === 0) return essentialPlaces;
-  
+
   // Comenzar con los lugares esenciales
   let result = [...essentialPlaces];
-  
+
   // Para cada lugar no esencial, encontrar el lugar en la secuencia más cercano
   for (const nonEssentialIdx of nonEssentialPlaces) {
     let bestPosition = 0;
     let minDistance = Infinity;
-    
+
     // Encontrar la mejor posición (después del lugar más cercano)
     for (let i = 0; i < result.length; i++) {
       const distance = distances[result[i]][nonEssentialIdx];
@@ -1949,11 +2131,11 @@ function distributeEssentialPlaces(essentialPlaces, nonEssentialPlaces, essentia
         bestPosition = i + 1; // Insertar después del lugar cercano
       }
     }
-    
+
     // Insertar en la mejor posición
     result.splice(bestPosition, 0, nonEssentialIdx);
   }
-  
+
   return result;
 }
 
@@ -1965,14 +2147,14 @@ function distributeEssentialPlaces(essentialPlaces, nonEssentialPlaces, essentia
  */
 function reoptimizeDayByProximity(dayPlaces, distances) {
   if (dayPlaces.length <= 1) return dayPlaces;
-  
+
   // Extraer índices originales
   const indices = dayPlaces.map(place => place.originalIndex || 0);
-  
+
   // Crear matriz de distancias para este subconjunto
   const n = indices.length;
   const subDistances = Array(n).fill().map(() => Array(n).fill(0));
-  
+
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       if (i !== j) {
@@ -1982,21 +2164,21 @@ function reoptimizeDayByProximity(dayPlaces, distances) {
       }
     }
   }
-  
+
   // Ordenar por vecino más cercano
   const visited = Array(n).fill(false);
   const orderedIndices = [];
-  
+
   // Comenzar con el primer lugar
   let currentIdx = 0;
   visited[currentIdx] = true;
   orderedIndices.push(currentIdx);
-  
+
   // Añadir el resto por proximidad
   while (orderedIndices.length < n) {
     let nextIdx = -1;
     let minDist = Infinity;
-    
+
     for (let i = 0; i < n; i++) {
       if (!visited[i]) {
         if (subDistances[currentIdx][i] < minDist) {
@@ -2005,7 +2187,7 @@ function reoptimizeDayByProximity(dayPlaces, distances) {
         }
       }
     }
-    
+
     if (nextIdx !== -1) {
       visited[nextIdx] = true;
       orderedIndices.push(nextIdx);
@@ -2014,7 +2196,7 @@ function reoptimizeDayByProximity(dayPlaces, distances) {
       break;
     }
   }
-  
+
   // Crear nueva lista ordenada
   const orderedDay = orderedIndices.map(idx => {
     const place = dayPlaces[idx];
@@ -2024,25 +2206,25 @@ function reoptimizeDayByProximity(dayPlaces, distances) {
       order_index: orderedIndices.indexOf(idx)
     };
   });
-  
+
   // Verificar lugares esenciales (no deberían quedar al final)
   const essentials = orderedDay.filter(p => p.isEssential);
   const nonEssentials = orderedDay.filter(p => !p.isEssential);
-  
+
   if (essentials.length > 0 && nonEssentials.length > 0) {
     // Asegurar que al menos un lugar esencial esté al principio
     const hasEssentialFirst = orderedDay[0].isEssential;
-    
+
     if (!hasEssentialFirst) {
       // Mover el primer esencial al principio
       const firstEssential = essentials[0];
       const currentIndex = orderedDay.indexOf(firstEssential);
-      
+
       // Solo si no está demasiado lejos del principio
       if (currentIndex > 2) {
         orderedDay.splice(currentIndex, 1);
         orderedDay.unshift(firstEssential);
-        
+
         // Reajustar índices
         orderedDay.forEach((p, idx) => {
           p.order_index = idx;
@@ -2050,7 +2232,7 @@ function reoptimizeDayByProximity(dayPlaces, distances) {
       }
     }
   }
-  
+
   return orderedDay;
 }
 

@@ -108,6 +108,33 @@ async function registerPlugins() {
     }
   });
 
+  // Añadir autenticación opcional (no falla si no hay token)
+  fastify.decorate('authenticateOptional', async function (request, reply) {
+    try {
+      const token = request.headers.authorization?.replace('Bearer ', '');
+
+      if (!token) {
+        // Sin token, sigue sin autenticar pero no da error
+        return;
+      }
+
+      // Verificar el token
+      const { data: { user }, error } = await fastify.supabase.auth.getUser(token);
+
+      if (error) {
+        console.log('Token inválido, continuando sin autenticación:', error.message);
+        return;
+      }
+
+      // Si el token es válido, guardar el usuario en la request
+      request.user = user;
+      console.log('Token verificado para usuario:', user.id);
+    } catch (err) {
+      console.log('Error en authenticateOptional:', err.message);
+      // No lanzar error, simplemente continuar sin usuario autenticado
+    }
+  });
+
   // Swagger para documentación
   await fastify.register(swagger, {
     swagger: {

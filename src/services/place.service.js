@@ -25,6 +25,11 @@ class PlaceService {
         name,
         description,
         coordinates,
+        address,
+        rating,
+        schedule,
+        order_in_day,
+        day_number,
         order_index,
         route_id,
         created_at
@@ -432,6 +437,90 @@ class PlaceService {
                 throw new Error('Error al actualizar el orden de los lugares');
             }
         }
+    }
+
+    /**
+     * Formatea los horarios del lugar en texto legible
+     * @param {Object} schedule - Objeto JSON con los horarios del lugar
+     * @returns {string} - Texto formateado de horarios
+     */
+    formatSchedule(schedule) {
+        if (!schedule) return 'Horario no disponible';
+
+        // Verificar si está abierto 24 horas (todos los días de 00:00 a 23:59)
+        const is24Hours = Object.values(schedule).every(day =>
+            day.open === "00:00" && day.close === "23:59"
+        );
+
+        if (is24Hours) {
+            return "Abierto 24 horas";
+        }
+
+        // Agrupar días por horarios iguales
+        const hoursBySchedule = {};
+        const days = {
+            'monday': 'Lunes',
+            'tuesday': 'Martes',
+            'wednesday': 'Miércoles',
+            'thursday': 'Jueves',
+            'friday': 'Viernes',
+            'saturday': 'Sábado',
+            'sunday': 'Domingo'
+        };
+
+        // Crear clave única para cada horario
+        Object.entries(schedule).forEach(([day, hours]) => {
+            const scheduleKey = `${hours.open}-${hours.close}`;
+            if (!hoursBySchedule[scheduleKey]) {
+                hoursBySchedule[scheduleKey] = [];
+            }
+            hoursBySchedule[scheduleKey].push(day);
+        });
+
+        // Convertir a texto formateado
+        const formattedSchedule = Object.entries(hoursBySchedule).map(([hours, daysWithSameHours]) => {
+            const [open, close] = hours.split('-');
+
+            // Ordenar días según el orden de la semana
+            const weekOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            daysWithSameHours.sort((a, b) => weekOrder.indexOf(a) - weekOrder.indexOf(b));
+
+            // Formatear días consecutivos (ej: Lunes a Jueves)
+            let dayRanges = [];
+            let rangeStart = null;
+            let previousDay = null;
+
+            daysWithSameHours.forEach((day, index) => {
+                const currentDayIndex = weekOrder.indexOf(day);
+
+                if (previousDay !== null && currentDayIndex !== weekOrder.indexOf(previousDay) + 1) {
+                    // Si no es consecutivo, cerrar el rango anterior
+                    if (rangeStart === previousDay) {
+                        dayRanges.push(days[rangeStart]);
+                    } else {
+                        dayRanges.push(`${days[rangeStart]} a ${days[previousDay]}`);
+                    }
+                    rangeStart = day;
+                } else if (rangeStart === null) {
+                    rangeStart = day;
+                }
+
+                // Si es el último día, cerrar el rango
+                if (index === daysWithSameHours.length - 1) {
+                    if (rangeStart === day) {
+                        dayRanges.push(days[rangeStart]);
+                    } else {
+                        dayRanges.push(`${days[rangeStart]} a ${days[day]}`);
+                    }
+                }
+
+                previousDay = day;
+            });
+
+            return `${dayRanges.join(', ')}: ${open}-${close}`;
+        });
+
+        return formattedSchedule.join(', ');
     }
 }
 
