@@ -379,17 +379,8 @@ async function userRoutes(fastify, options) {
     try {
       const userId = request.user.id;
 
-      console.log('Obteniendo perfil para usuario autenticado:', userId);
-
       const userService = new UserService(this.supabase);
       const profile = await userService.getUserProfile(userId, userId);
-
-      console.log('Perfil cargado correctamente:', {
-        id: profile.id,
-        username: profile.username,
-        routesCount: profile.routesCount,
-        routesIncluidos: profile.routes ? profile.routes.length : 0
-      });
 
       // Devolver directamente el perfil sin envolverlo
       return reply.code(200).send(profile);

@@ -74,64 +74,52 @@ async function registerPlugins() {
   });
 
   // Decorador para verificar autenticación en rutas protegidas
-  fastify.decorate('authenticate', async (request, reply) => {
+  fastify.decorate('authenticate', async function (request, reply) {
     try {
-      // Obtener el token de la cabecera Authorization
       const authHeader = request.headers.authorization;
-      console.log('Auth Header:', authHeader);
 
       if (!authHeader) {
-        console.log('No se encontró cabecera de autorización');
-        return reply.code(401).send({ success: false, message: 'No autorizado: Falta token' });
+        throw new Error('No se proporcionó token de autenticación');
       }
 
-      // Si el token tiene el formato "Bearer <token>", extraer solo el token
-      let token = authHeader;
-      if (authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7);
-      }
+      const token = authHeader.replace('Bearer ', '');
 
-      console.log('Token a verificar:', token.substring(0, 15) + '...');
-
-      // Verificar el token
       try {
-        const decoded = fastify.jwt.verify(token);
-        request.user = decoded;
-        console.log('Token verificado para usuario:', decoded.id);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'un_secreto_muy_seguro');
+        request.user = { id: decoded.id };
       } catch (err) {
-        console.log('Error al verificar token:', err.message);
-        return reply.code(401).send({ success: false, message: 'No autorizado: Token inválido' });
+        throw new Error('Token de autenticación inválido');
       }
     } catch (err) {
-      console.log('Error en autenticación:', err.message);
-      reply.code(401).send({ success: false, message: 'No autorizado' });
+      return reply.code(401).send({
+        success: false,
+        message: err.message
+      });
     }
   });
 
-  // Añadir autenticación opcional (no falla si no hay token)
+  // Middleware para autenticación opcional (permite acceso sin autenticación)
   fastify.decorate('authenticateOptional', async function (request, reply) {
     try {
-      const token = request.headers.authorization?.replace('Bearer ', '');
+      const authHeader = request.headers.authorization;
 
-      if (!token) {
-        // Sin token, sigue sin autenticar pero no da error
+      if (!authHeader) {
+        // Continuar sin autenticación
         return;
       }
 
-      // Verificar el token
-      const { data: { user }, error } = await fastify.supabase.auth.getUser(token);
+      const token = authHeader.replace('Bearer ', '');
 
-      if (error) {
-        console.log('Token inválido, continuando sin autenticación:', error.message);
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'un_secreto_muy_seguro');
+        const user = { id: decoded.id };
+        request.user = user;
+      } catch (error) {
+        // Error en token, pero seguimos sin autenticación
         return;
       }
-
-      // Si el token es válido, guardar el usuario en la request
-      request.user = user;
-      console.log('Token verificado para usuario:', user.id);
     } catch (err) {
-      console.log('Error en authenticateOptional:', err.message);
-      // No lanzar error, simplemente continuar sin usuario autenticado
+      // Continuar sin autenticación en caso de cualquier error
     }
   });
 
@@ -183,9 +171,6 @@ async function registerPlugins() {
 
 // Registro de rutas
 async function registerRoutes() {
-
-
-
   await fastify.register(require('./routes'));
 }
 

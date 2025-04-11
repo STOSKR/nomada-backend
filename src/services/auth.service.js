@@ -8,11 +8,9 @@ class AuthService {
      */
     constructor(supabase) {
         if (!supabase) {
-            console.error('Error: Cliente de Supabase no inicializado');
             throw new Error('Cliente de Supabase no disponible');
         }
         this.supabase = supabase;
-        console.log('AuthService inicializado con cliente Supabase');
     }
 
     /**
@@ -187,6 +185,24 @@ class AuthService {
         return {
             success: true,
             message: 'Se ha enviado un correo con instrucciones para restablecer la contraseña'
+        };
+    }
+
+    async loginWithEmail(email, password) {
+        const { data, error } = await this.supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        // Devolver datos de sesión y user
+        return {
+            success: true,
+            session: data.session,
+            user: data.user
         };
     }
 }

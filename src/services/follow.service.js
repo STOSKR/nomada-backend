@@ -8,11 +8,9 @@ class FollowService {
      */
     constructor(supabase) {
         if (!supabase) {
-            console.error('Error: Cliente de Supabase no inicializado');
             throw new Error('Cliente de Supabase no disponible');
         }
         this.supabase = supabase;
-        console.log('FollowService inicializado con cliente Supabase');
     }
 
     /**

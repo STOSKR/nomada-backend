@@ -447,6 +447,58 @@ const schemas = {
         }
       }
     }
+  },
+
+  // Esquema para obtener lugares de una ruta
+  getPlaces: {
+    description: 'Obtener todos los lugares de una ruta específica',
+    tags: ['rutas', 'lugares'],
+    params: {
+      type: 'object',
+      required: ['id'],
+      properties: {
+        id: { type: 'string' }
+      }
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          routeId: { type: 'string' },
+          places: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                description: { type: 'string' },
+                address: { type: 'string' },
+                coordinates: { type: 'string' },
+                rating: { type: 'number' },
+                formatted_schedule: { type: 'string' },
+                schedule: { type: 'object' },
+                order_in_day: { type: 'integer' },
+                day_number: { type: 'integer' },
+                order_index: { type: 'integer' },
+                photos: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      public_url: { type: 'string' },
+                      caption: { type: 'string' },
+                      order_index: { type: 'integer' }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 };
 
@@ -529,68 +581,28 @@ async function routeRoutes(fastify, options) {
   fastify.post('/', {
     schema: schemas.createRoute,
     preValidation: [fastify.authenticate]
-  }, async function (request, reply) {
+  }, async (request, reply) => {
     try {
       const userId = request.user.id;
-      const routeData = request.body;
 
-      console.log('Solicitud de creación de ruta recibida:', {
-        userId: userId,
-        tieneEsquema: routeData !== undefined,
-        lugares: routeData.places ? routeData.places.length : 0
+      const routeData = {
+        ...request.body,
+        places: request.body.places || []
+      };
+
+      const routeService = new RouteService(fastify.supabase);
+      const route = await routeService.createRoute(routeData, userId);
+
+      return reply.code(201).send({
+        success: true,
+        message: 'Ruta creada correctamente',
+        routeId: route.id
       });
-
-      // Validar que haya al menos un lugar
-      if (!routeData.places || !Array.isArray(routeData.places) || routeData.places.length === 0) {
-        return reply.code(400).send({
-          success: false,
-          message: 'La ruta debe tener al menos un lugar'
-        });
-      }
-
-      // Validar que cada lugar tenga los campos mínimos necesarios
-      for (let i = 0; i < routeData.places.length; i++) {
-        const place = routeData.places[i];
-        if (!place.name) {
-          return reply.code(400).send({
-            success: false,
-            message: `El lugar en posición ${i} no tiene nombre`
-          });
-        }
-      }
-
-      // Convertir el formato de horarios si no está en JSONB
-      routeData.places = routeData.places.map(place => {
-        // Si schedule existe pero no tiene el formato correcto, intenta convertirlo
-        if (place.schedule && typeof place.schedule === 'object') {
-          // Asegurarnos de que cada día tiene formato correcto
-          ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
-            if (!place.schedule[day]) {
-              place.schedule[day] = { "open": "00:00", "close": "00:00" };
-            } else if (typeof place.schedule[day] === 'string') {
-              const [open, close] = place.schedule[day].split('-');
-              place.schedule[day] = { open, close };
-            }
-          });
-        }
-        return place;
-      });
-
-      const routeService = new RouteService(this.supabase);
-      const result = await routeService.createRoute(routeData, userId);
-
-      return reply.code(201).send(result);
     } catch (error) {
-      request.log.error('Error en ruta POST /routes:', error);
-
-      // Si ya está formateado como queremos
-      if (error.success === false && error.message) {
-        return reply.code(error.statusCode || 500).send(error);
-      }
-
-      return reply.code(500).send({
+      request.log.error(error);
+      return reply.code(400).send({
         success: false,
-        message: error.message || 'Error al crear la ruta'
+        message: error.message
       });
     }
   });
@@ -791,94 +803,24 @@ async function routeRoutes(fastify, options) {
     }
   });
 
-  // GET /routes/:id/places - Obtener todos los lugares de una ruta específica
+  // Obtener lugares de una ruta
   fastify.get('/:id/places', {
-    schema: {
-      description: 'Obtener todos los lugares de una ruta específica',
-      tags: ['rutas', 'lugares'],
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            routeId: { type: 'string' },
-            places: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                  address: { type: 'string' },
-                  coordinates: { type: 'string' },
-                  rating: { type: 'number' },
-                  formatted_schedule: { type: 'string' },
-                  schedule: { type: 'object' },
-                  order_in_day: { type: 'integer' },
-                  day_number: { type: 'integer' },
-                  order_index: { type: 'integer' },
-                  photos: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        id: { type: 'string' },
-                        public_url: { type: 'string' },
-                        caption: { type: 'string' },
-                        order_index: { type: 'integer' }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async function (request, reply) {
+    schema: schemas.getPlaces,
+    preValidation: [fastify.authenticateOptional]
+  }, async (request, reply) => {
     try {
       const routeId = request.params.id;
+      const userId = request.user ? request.user.id : null;
 
-      // No es necesario autenticación, pero si hay un usuario logueado, usamos su ID
-      const userId = request.user?.id || null;
+      const routeService = new RouteService(fastify.supabase);
+      const places = await routeService.getPlacesFromRoute(routeId, userId);
 
-      console.log(`Obteniendo lugares de la ruta ${routeId}`);
-
-      const routeService = new RouteService(this.supabase);
-      const { places } = await routeService.getPlacesFromRoute(routeId, userId);
-
-      return reply.code(200).send({
-        routeId,
-        places
-      });
+      return reply.send(places);
     } catch (error) {
-      request.log.error('Error al obtener lugares de la ruta:', error);
-
-      if (error.message === 'Ruta no encontrada') {
-        return reply.code(404).send({
-          success: false,
-          message: 'Ruta no encontrada'
-        });
-      }
-
-      if (error.message.includes('No tienes permiso')) {
-        return reply.code(403).send({
-          success: false,
-          message: error.message
-        });
-      }
-
-      return reply.code(500).send({
+      request.log.error('Error al obtener lugares:', error);
+      return reply.code(error.message.includes('No tienes permiso') ? 403 : 400).send({
         success: false,
-        message: `Error al obtener lugares de la ruta: ${error.message}`
+        message: error.message
       });
     }
   });

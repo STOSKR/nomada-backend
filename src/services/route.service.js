@@ -26,8 +26,6 @@ class RouteService {
     } = filters;
 
     try {
-      console.log('Consultando rutas con filtros:', filters);
-
       // Consulta base para las rutas
       let query = this.supabase
         .from('routes')
@@ -100,7 +98,6 @@ class RouteService {
         user: userMap[route.user_id] || { id: route.user_id }
       }));
 
-      console.log(`Se encontraron ${routesWithUsers.length} rutas`);
       return routesWithUsers;
     } catch (error) {
       console.error('Error completo al obtener rutas:', error);
@@ -552,8 +549,6 @@ class RouteService {
    */
   async getRouteById(routeId, userId) {
     try {
-      console.log(`Obteniendo ruta con ID: ${routeId}, solicitada por usuario: ${userId || 'anónimo'}`);
-
       // Obtener la ruta
       const { data: route, error } = await this.supabase
         .from('routes')
@@ -572,45 +567,37 @@ class RouteService {
         .single();
 
       if (error) {
-        console.error('Error al obtener ruta:', error);
-        throw new Error(`No se pudo obtener la ruta: ${error.message}`);
-      }
-
-      if (!route) {
         throw new Error('Ruta no encontrada');
       }
 
-      // Verificar permisos - si la ruta es privada, solo puede verla su propietario
+      // Si la ruta es privada y el usuario no es el propietario
       if (!route.is_public && (!userId || route.user_id !== userId)) {
         throw new Error('No tienes permiso para ver esta ruta');
       }
 
-      // Obtener detalles del creador
-      const { data: user, error: userError } = await this.supabase
+      // Obtener información del creador
+      const { data: creator, error: creatorError } = await this.supabase
         .from('users')
-        .select('id, username, full_name, avatar_url')
+        .select('id, username, avatar_url')
         .eq('id', route.user_id)
         .single();
 
-      if (userError) {
-        console.warn('No se pudo obtener información del usuario creador:', userError);
-        // Continuar sin info de usuario
+      if (creatorError) {
+        console.error('Error al obtener creador:', creatorError);
       }
 
-      // Obtener lugares de la ruta
+      // Obtener lugares asociados a la ruta
       const { data: places, error: placesError } = await this.supabase
         .from('places')
         .select(`
           id,
           name,
           description,
-          coordinates,
           address,
-          rating,
-          schedule,
-          order_in_day,
+          coordinates,
+          order_index,
           day_number,
-          order_index
+          order_in_day
         `)
         .eq('route_id', routeId)
         .order('day_number', { ascending: true })
@@ -618,59 +605,32 @@ class RouteService {
 
       if (placesError) {
         console.error('Error al obtener lugares:', placesError);
-        throw new Error(`Error al obtener lugares: ${placesError.message}`);
       }
 
-      // Obtener fotos para cada lugar
-      const placeService = new PlaceService(this.supabase);
-      const placesWithPhotos = await Promise.all(places.map(async (place) => {
-        const { data: photos, error: photosError } = await this.supabase
-          .from('photos')
-          .select('id, public_url, caption, order_index')
-          .eq('place_id', place.id)
-          .order('order_index', { ascending: true });
-
-        if (photosError) {
-          console.warn(`Error al obtener fotos para lugar ${place.id}:`, photosError);
-        }
-
-        // Formatear el horario
-        const formatted_schedule = placeService.formatSchedule(place.schedule);
-
-        return {
-          ...place,
-          photos: photos || [],
-          formatted_schedule
-        };
-      }));
-
-      // Verificar si el usuario ha dado like (si está autenticado)
+      // Verificar si el usuario ha dado like
       let isLiked = false;
       if (userId) {
-        const { data: like, error: likeError } = await this.supabase
+        const { data: likeData, error: likeError } = await this.supabase
           .from('route_likes')
           .select('id')
           .eq('route_id', routeId)
           .eq('user_id', userId)
           .maybeSingle();
 
-        if (likeError && likeError.code !== 'PGRST116') {
-          console.warn('Error al verificar like:', likeError);
-        } else {
-          isLiked = !!like;
+        if (!likeError && likeData) {
+          isLiked = true;
         }
       }
 
-      console.log(`Ruta ${routeId} obtenida con éxito, ${places.length} lugares`);
-
+      // Combinar toda la información
       return {
         ...route,
-        user: user || { id: route.user_id },
-        places: placesWithPhotos,
+        creator: creator || { id: route.user_id },
+        places: places || [],
         isLiked
       };
     } catch (error) {
-      console.error('Error al obtener ruta:', error);
+      console.error(`Error al obtener ruta ${routeId}:`, error);
       throw error;
     }
   }
@@ -683,85 +643,69 @@ class RouteService {
    */
   async getPlacesFromRoute(routeId, userId) {
     try {
-      console.log(`Obteniendo lugares de la ruta ${routeId}`);
-
-      // Primero verificar que la ruta existe y el usuario tiene permiso
-      const { data: route, error } = await this.supabase
+      // Primero verificar si la ruta existe y si el usuario tiene permisos
+      const { data: route, error: routeError } = await this.supabase
         .from('routes')
         .select('id, is_public, user_id')
         .eq('id', routeId)
         .single();
 
-      if (error) {
-        console.error('Error al verificar la ruta:', error);
-        throw new Error(`No se pudo obtener la ruta: ${error.message}`);
-      }
-
-      if (!route) {
+      if (routeError) {
         throw new Error('Ruta no encontrada');
       }
 
-      // Si la ruta es privada, verificar que el usuario tenga permiso
+      // Verificar si el usuario tiene permiso para ver la ruta
       if (!route.is_public && (!userId || route.user_id !== userId)) {
         throw new Error('No tienes permiso para ver esta ruta');
       }
 
-      // Obtener los lugares y ordenarlos por día y orden
+      // Obtener los lugares de la ruta
       const { data: places, error: placesError } = await this.supabase
         .from('places')
         .select(`
           id,
           name,
           description,
-          coordinates,
           address,
+          coordinates,
           rating,
-          schedule,
-          order_in_day,
           day_number,
-          order_index
+          order_in_day,
+          schedule,
+          photos (
+            id,
+            public_url,
+            caption,
+            order_index
+          )
         `)
         .eq('route_id', routeId)
         .order('day_number', { ascending: true })
         .order('order_in_day', { ascending: true });
 
       if (placesError) {
-        console.error('Error al obtener lugares:', placesError);
-        throw new Error(`Error al obtener lugares: ${placesError.message}`);
+        throw new Error('Error al obtener los lugares');
       }
 
       if (!places || places.length === 0) {
-        console.log(`La ruta ${routeId} no tiene lugares asociados`);
-        return { places: [] };
+        return [];
       }
 
-      // Obtener fotos para cada lugar y formatear horarios
+      // Obtener los detalles adicionales para cada lugar
       const placeService = new PlaceService(this.supabase);
-      const placesWithDetails = await Promise.all(places.map(async (place) => {
-        // Obtener fotos
-        const { data: photos, error: photosError } = await this.supabase
-          .from('photos')
-          .select('id, public_url, caption, order_index')
-          .eq('place_id', place.id)
-          .order('order_index', { ascending: true });
+      const placesWithDetails = await Promise.all(
+        places.map(async (place) => {
+          // Procesar el horario
+          const formatted_schedule = placeService.formatSchedule(place.schedule);
 
-        if (photosError) {
-          console.warn(`Error al obtener fotos para lugar ${place.id}:`, photosError);
-        }
+          return {
+            ...place,
+            formatted_schedule
+          };
+        })
+      );
 
-        // Formatear horario
-        const formatted_schedule = placeService.formatSchedule(place.schedule);
-
-        return {
-          ...place,
-          photos: photos || [],
-          formatted_schedule
-        };
-      }));
-
-      console.log(`Obtenidos ${placesWithDetails.length} lugares para la ruta ${routeId}`);
-
-      return { places: placesWithDetails };
+      return placesWithDetails;
     } catch (error) {
       console.error('Error al obtener lugares de la ruta:', error);
       throw error;

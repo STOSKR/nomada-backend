@@ -12,7 +12,6 @@ class UserService {
       throw new Error('Cliente de Supabase no disponible');
     }
     this.supabase = supabase;
-    console.log('UserService inicializado con cliente Supabase');
   }
 
   /**
@@ -75,12 +74,6 @@ class UserService {
       console.error('Error al obtener rutas del usuario:', userRoutesError);
     }
 
-    // Añadir log para depurar
-    console.log(`Rutas encontradas para el usuario ${userId}:`, userRoutes ? userRoutes.length : 0);
-    if (userRoutes && userRoutes.length > 0) {
-      console.log('Primera ruta:', JSON.stringify(userRoutes[0]));
-    }
-
     // Verificar si el usuario actual sigue a este perfil
     let isFollowing = null;
     if (currentUserId && currentUserId !== userId) {
@@ -111,12 +104,6 @@ class UserService {
       isFollowing,
       routes: userRoutes || []
     };
-
-    // Log del objeto resultante
-    console.log(`Objeto de perfil a devolver para ${userId}:`, {
-      ...resultObj,
-      routes: `Array con ${resultObj.routes.length} rutas`
-    });
 
     return resultObj;
   }
@@ -380,12 +367,6 @@ class UserService {
       console.error('Error al obtener rutas del usuario:', userRoutesError);
     }
 
-    // Añadir log para depurar
-    console.log(`Rutas encontradas para el usuario ${data.id}:`, userRoutes ? userRoutes.length : 0);
-    if (userRoutes && userRoutes.length > 0) {
-      console.log('Primera ruta:', JSON.stringify(userRoutes[0]));
-    }
-
     // Verificar si el usuario actual sigue a este perfil
     let isFollowing = null;
     if (currentUserId && currentUserId !== data.id) {
@@ -416,12 +397,6 @@ class UserService {
       isFollowing,
       routes: userRoutes || []
     };
-
-    // Log del objeto resultante
-    console.log(`Objeto de perfil a devolver para ${data.id}:`, {
-      ...resultObj,
-      routes: `Array con ${resultObj.routes.length} rutas`
-    });
 
     return resultObj;
   }
