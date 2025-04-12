@@ -251,7 +251,6 @@ const schemas = {
     description: 'Obtener perfil de un usuario por ID',
     tags: ['usuarios'],
     hide: true,
-    security: [{ apiKey: [] }],
     params: {
       type: 'object',
       properties: {
@@ -430,12 +429,20 @@ async function userRoutes(fastify, options) {
 
   // Obtener perfil de usuario por ID
   fastify.get('/:id', {
-    schema: schemas.getUserById,
-    preValidation: [fastify.authenticate]
+    schema: schemas.getUserById
   }, async (request, reply) => {
     try {
       const requestedId = request.params.id;
-      const currentUserId = request.user.id;
+      // Si no hay usuario autenticado, usamos null como currentUserId
+      const currentUserId = request.user ? request.user.id : null;
+
+      // Si el ID es "me", pero no hay usuario autenticado
+      if (requestedId === "me" && !currentUserId) {
+        return reply.code(401).send({
+          success: false,
+          message: 'Se requiere autenticación para acceder a tu propio perfil con "me"'
+        });
+      }
 
       // Si el ID es "me", devuelve el perfil del usuario actual
       if (requestedId === "me") {

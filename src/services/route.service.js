@@ -720,6 +720,86 @@ class RouteService {
       throw error;
     }
   }
+
+  /**
+   * Obtiene todas las rutas ordenadas cronológicamente de reciente a antiguo
+   * @param {Object} options - Opciones de paginación
+   * @param {number} options.limit - Límite de rutas a retornar
+   * @param {number} options.offset - Desplazamiento para paginación
+   * @param {string|null} userId - ID del usuario autenticado (opcional)
+   * @returns {Promise<Array>} - Lista de rutas ordenadas cronológicamente
+   */
+  async getAllRoutes(options = {}, userId = null) {
+    const { limit = 20, offset = 0 } = options;
+
+    try {
+      // Consulta base para obtener todas las rutas
+      let query = this.supabase
+        .from('routes')
+        .select(`
+          id,
+          title,
+          is_public,
+          likes_count,
+          saved_count,
+          comments_count,
+          cover_image,
+          created_at,
+          updated_at,
+          user_id
+        `)
+        .eq('is_public', true) // Solo rutas públicas
+        .order('created_at', { ascending: false }); // Orden cronológico: de más reciente a más antiguo
+
+      // Aplicar paginación
+      query = query.range(offset, offset + limit - 1);
+
+      // Ejecutar la consulta
+      const { data: routes, error } = await query;
+
+      if (error) {
+        console.error('Error al obtener rutas:', error);
+        throw new Error(`Error al obtener las rutas: ${error.message}`);
+      }
+
+      // Si no hay rutas, devolver array vacío
+      if (!routes || routes.length === 0) {
+        return [];
+      }
+
+      // Obtener información de los usuarios de cada ruta en una sola consulta
+      const userIds = [...new Set(routes.map(route => route.user_id))];
+
+      const { data: users, error: usersError } = await this.supabase
+        .from('users')
+        .select('id, username, full_name, avatar_url')
+        .in('id', userIds);
+
+      if (usersError) {
+        console.error('Error al obtener usuarios:', usersError);
+        // Continuar sin información de usuario
+      }
+
+      // Crear un mapa de usuarios para acceso rápido
+      const userMap = {};
+      if (users) {
+        users.forEach(user => {
+          userMap[user.id] = user;
+        });
+      }
+
+      // Añadir la información de usuario a cada ruta
+      const routesWithUsers = routes.map(route => ({
+        ...route,
+        user: userMap[route.user_id] || { id: route.user_id }
+      }));
+
+      return routesWithUsers;
+    } catch (error) {
+      console.error('Error al obtener todas las rutas:', error);
+      throw new Error(`Error al obtener las rutas: ${error.message}`);
+    }
+  }
 }
 
 module.exports = RouteService; 

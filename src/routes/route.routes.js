@@ -503,7 +503,47 @@ const schemas = {
         }
       }
     }
-  }
+  },
+
+  // Schema para obtener todas las rutas ordenadas cronológicamente
+  getAllRoutes: {
+    description: 'Obtener todas las rutas públicas ordenadas cronológicamente de reciente a antiguo',
+    tags: ['rutas'],
+    querystring: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', default: 20 },
+        offset: { type: 'integer', default: 0 }
+      }
+    },
+    response: {
+      200: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            is_public: { type: 'boolean' },
+            likes_count: { type: 'integer' },
+            saved_count: { type: 'integer' },
+            comments_count: { type: 'integer' },
+            cover_image: { type: 'string' },
+            created_at: { type: 'string', format: 'date-time' },
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                username: { type: 'string' },
+                full_name: { type: 'string' },
+                avatar_url: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
 };
 
 /**
@@ -533,6 +573,33 @@ async function routeRoutes(fastify, options) {
       return reply.code(200).send(routes);
     } catch (error) {
       request.log.error('Error al listar rutas:', error);
+
+      return reply.code(500).send({
+        success: false,
+        message: 'Error al obtener las rutas: ' + error.message
+      });
+    }
+  });
+
+  // Obtener todas las rutas públicas ordenadas cronológicamente
+  fastify.get('/all', {
+    schema: schemas.getAllRoutes,
+    preValidation: [fastify.authenticateOptional]
+  }, async function (request, reply) {
+    try {
+      const { limit = 20, offset = 0 } = request.query;
+      const filters = {
+        limit,
+        offset
+      };
+
+      // El userId ya no es relevante porque solo se muestran rutas públicas
+      const routeService = new RouteService(this.supabase);
+      const routes = await routeService.getAllRoutes(filters);
+
+      return reply.code(200).send(routes);
+    } catch (error) {
+      request.log.error('Error al obtener todas las rutas públicas:', error);
 
       return reply.code(500).send({
         success: false,
