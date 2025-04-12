@@ -15,7 +15,7 @@ const schemas = {
     signup: {
         description: 'Registrar un nuevo usuario',
         tags: ['autenticación'],
-        consumes: ['multipart/form-data'],
+        consumes: ['application/json'],
         body: {
             type: 'object',
             required: ['email', 'password', 'nomada_id'],
@@ -24,8 +24,7 @@ const schemas = {
                 password: { type: 'string', minLength: 8, description: 'Contraseña (requerido, mínimo 8 caracteres)' },
                 nomada_id: { type: 'string', minLength: 3, description: 'Identificador único de usuario (requerido, mínimo 3 caracteres)' },
                 username: { type: 'string', description: 'Nombre visible del usuario' },
-                bio: { type: 'string', description: 'Biografía del usuario' },
-                avatar: { type: 'string', format: 'binary', description: 'Archivo de imagen para el avatar del usuario' }
+                bio: { type: 'string', description: 'Biografía del usuario' }
             }
         },
         response: {
@@ -177,33 +176,9 @@ async function authRoutes(fastify, options) {
     fastify.post('/signup', { schema: schemas.signup }, async (request, reply) => {
         try {
             const data = request.body;
-            let avatarUrl = null;
 
-            // Si se subió un archivo de avatar
-            if (request.isMultipart()) {
-                const file = await request.file();
-                const buffer = await file.toBuffer();
-                const filename = `${data.nomada_id}-${Date.now()}.${file.filename.split('.').pop()}`;
-
-                // Subir el archivo a Supabase Storage
-                const { data: uploadData, error: uploadError } = await fastify.supabase.storage
-                    .from('avatars')
-                    .upload(filename, buffer, {
-                        contentType: file.mimetype,
-                        upsert: true
-                    });
-
-                if (uploadError) throw uploadError;
-
-                // Obtener la URL pública del archivo
-                const { data: { publicUrl } } = fastify.supabase.storage
-                    .from('avatars')
-                    .getPublicUrl(filename);
-
-                avatarUrl = publicUrl;
-            }
-
-            const result = await authService.signup({ ...data, avatar_url: avatarUrl });
+            // El avatar se subirá en un endpoint separado, así que pasamos null aquí
+            const result = await authService.signup({ ...data, avatar_url: null });
 
             // Generar token JWT
             const token = fastify.jwt.sign({

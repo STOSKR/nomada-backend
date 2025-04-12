@@ -297,6 +297,38 @@ const schemas = {
         }
       }
     }
+  },
+
+  // Schema para subir avatar
+  uploadAvatar: {
+    description: 'Subir avatar del usuario',
+    tags: ['usuarios'],
+    security: [{ apiKey: [] }],
+    consumes: ['multipart/form-data'],
+    params: {
+      type: 'object',
+      properties: {
+        nomada_id: { type: 'string' }
+      },
+      required: ['nomada_id']
+    },
+    body: {
+      type: 'object',
+      properties: {
+        avatar: { type: 'string', format: 'binary', description: 'Archivo de imagen para el avatar del usuario' }
+      },
+      required: ['avatar']
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          message: { type: 'string' },
+          avatar_url: { type: 'string', description: 'URL del avatar del usuario' }
+        }
+      }
+    }
   }
 };
 
@@ -624,6 +656,91 @@ async function userRoutes(fastify, options) {
       }
 
       return reply.code(400).send({
+        success: false,
+        message: error.message
+      });
+    }
+  });
+
+  // Subir avatar para un usuario
+  fastify.post('/:nomada_id/avatar', {
+    schema: schemas.uploadAvatar,
+    preValidation: [fastify.authenticate]
+  }, async (request, reply) => {
+    try {
+      // Verificar si el usuario actual tiene permiso para subir el avatar
+      const currentUserId = request.user.id;
+      const nomadaId = request.params.nomada_id;
+
+      // Obtener el ID del usuario por su nomada_id
+      const { data: userData, error: userError } = await fastify.supabase
+        .from('users')
+        .select('id')
+        .eq('nomada_id', nomadaId)
+        .single();
+
+      if (userError || !userData) {
+        return reply.code(404).send({
+          success: false,
+          message: 'Usuario no encontrado'
+        });
+      }
+
+      // Verificar que el usuario actual es el mismo que el usuario del avatar
+      if (currentUserId !== userData.id) {
+        return reply.code(403).send({
+          success: false,
+          message: 'No tienes permiso para actualizar el avatar de este usuario'
+        });
+      }
+
+      let avatarUrl = null;
+
+      // Procesar el archivo de avatar
+      if (request.isMultipart()) {
+        const file = await request.file();
+        const buffer = await file.toBuffer();
+        const filename = `${nomadaId}-${Date.now()}.${file.filename.split('.').pop()}`;
+
+        // Subir el archivo a Supabase Storage
+        const { data: uploadData, error: uploadError } = await fastify.supabase.storage
+          .from('avatars')
+          .upload(filename, buffer, {
+            contentType: file.mimetype,
+            upsert: true
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Obtener la URL pública del archivo
+        const { data: { publicUrl } } = fastify.supabase.storage
+          .from('avatars')
+          .getPublicUrl(filename);
+
+        avatarUrl = publicUrl;
+
+        // Actualizar el avatar_url en el perfil del usuario
+        const { error: updateError } = await fastify.supabase
+          .from('users')
+          .update({ avatar_url: avatarUrl })
+          .eq('id', userData.id);
+
+        if (updateError) throw updateError;
+
+        return {
+          success: true,
+          message: 'Avatar actualizado correctamente',
+          avatar_url: avatarUrl
+        };
+      } else {
+        return reply.code(400).send({
+          success: false,
+          message: 'No se ha proporcionado un archivo de avatar'
+        });
+      }
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
         success: false,
         message: error.message
       });
