@@ -6,13 +6,22 @@ require('dotenv').config();
 // Importar dependencias
 const fastify = require('fastify')({
   logger: {
-    level: 'error',
+    level: 'info',
     transport: {
       target: 'pino-pretty',
       options: {
         translateTime: 'HH:MM:ss Z',
         ignore: 'pid,hostname',
       }
+    }
+  },
+  bodyLimit: 1048576,
+  ajv: {
+    customOptions: {
+      allErrors: true,
+      removeAdditional: false,
+      useDefaults: true,
+      coerceTypes: true
     }
   }
 });
@@ -51,12 +60,27 @@ async function registerPlugins() {
   // Conexión a Supabase
   await fastify.register(supabasePlugin);
 
+  // Configuración explícita para el parser JSON
+  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, function (req, body, done) {
+    try {
+      const json = JSON.parse(body);
+      done(null, json);
+    } catch (err) {
+      err.statusCode = 400;
+      err.message = 'Error al parsear JSON: ' + err.message;
+      done(err, undefined);
+    }
+  });
+
   // Multipart para subida de archivos
   await fastify.register(multipart, {
     limits: {
       fileSize: 5 * 1024 * 1024, // 5MB
       files: 1
-    }
+    },
+    // Solo procesar como multipart las rutas que realmente lo necesitan
+    addHook: false,
+    attachFieldsToBody: false
   });
 
   // CORS

@@ -19,6 +19,7 @@ const schemas = {
         body: {
             type: 'object',
             required: ['email', 'password', 'nomada_id'],
+            additionalProperties: true,
             properties: {
                 email: { type: 'string', format: 'email', description: 'Correo electrónico (requerido)' },
                 password: { type: 'string', minLength: 8, description: 'Contraseña (requerido, mínimo 8 caracteres)' },
@@ -173,9 +174,24 @@ async function authRoutes(fastify, options) {
     const authService = new AuthService(fastify.supabase);
 
     // Ruta para registro de nuevo usuario
-    fastify.post('/signup', { schema: schemas.signup }, async (request, reply) => {
+    fastify.post('/signup', {
+        schema: schemas.signup,
+        // Configurar explícitamente el content-type para JSON 
+        contentType: 'application/json'
+    }, async (request, reply) => {
         try {
+            // Asegurarse de que tenemos un cuerpo de solicitud válido
+            if (!request.body || typeof request.body !== 'object') {
+                return reply.code(400).send({
+                    success: false,
+                    message: "Se requiere un objeto JSON válido"
+                });
+            }
+
             const data = request.body;
+
+            // Log para depuración
+            console.log("Datos recibidos en /signup:", data);
 
             // El avatar se subirá en un endpoint separado, así que pasamos null aquí
             const result = await authService.signup({ ...data, avatar_url: null });
@@ -256,6 +272,55 @@ async function authRoutes(fastify, options) {
             const result = await authService.resetPassword(email);
             return result;
         } catch (error) {
+            request.log.error(error);
+            return reply.code(400).send({
+                success: false,
+                message: error.message
+            });
+        }
+    });
+
+    // RUTA TEMPORAL: Registro simplificado sin validación de esquema para solucionar el error "body must be object"
+    fastify.post('/register-simple', {}, async (request, reply) => {
+        try {
+            console.log('Headers:', request.headers);
+            console.log('Cuerpo recibido:', request.body);
+
+            // Extraer los datos necesarios
+            const { email, password, nomada_id, username, bio } = request.body;
+
+            // Validación manual básica
+            if (!email || !password || !nomada_id) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Los campos email, password y nomada_id son obligatorios'
+                });
+            }
+
+            // Procesar el registro sin avatar
+            const result = await authService.signup({
+                email,
+                password,
+                nomada_id,
+                username: username || null,
+                bio: bio || null,
+                avatar_url: null
+            });
+
+            // Generar token JWT
+            const token = fastify.jwt.sign({
+                id: result.user.id,
+                email: result.user.email
+            });
+
+            return reply.code(201).send({
+                success: true,
+                message: result.message,
+                user: result.user,
+                token
+            });
+        } catch (error) {
+            console.error('Error completo:', error);
             request.log.error(error);
             return reply.code(400).send({
                 success: false,
