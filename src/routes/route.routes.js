@@ -30,6 +30,7 @@ const schemas = {
           type: 'object',
           properties: {
             id: { type: 'string' },
+            title: { type: 'string' },
             is_public: { type: 'boolean' },
             likes_count: { type: 'integer' },
             saved_count: { type: 'integer' },
@@ -68,6 +69,7 @@ const schemas = {
         type: 'object',
         properties: {
           id: { type: 'string' },
+          title: { type: 'string' },
           is_public: { type: 'boolean' },
           likes_count: { type: 'integer' },
           saved_count: { type: 'integer' },

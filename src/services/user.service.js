@@ -51,6 +51,7 @@ class UserService {
       .from('routes')
       .select(`
         id,
+        title,
         is_public,
         likes_count,
         saved_count,
@@ -344,6 +345,7 @@ class UserService {
       .from('routes')
       .select(`
         id,
+        title,
         is_public,
         likes_count,
         saved_count,

@@ -264,6 +264,7 @@ const schemas = {
         type: 'object',
         properties: {
           id: { type: 'string' },
+          title: { type: 'string' },
           nomada_id: { type: 'string' },
           username: { type: 'string' },
           email: { type: 'string' },
@@ -281,6 +282,7 @@ const schemas = {
               type: 'object',
               properties: {
                 id: { type: 'string' },
+                title: { type: 'string' },
                 is_public: { type: 'boolean' },
                 likes_count: { type: 'integer' },
                 saved_count: { type: 'integer' },
@@ -359,6 +361,7 @@ async function userRoutes(fastify, options) {
                 type: 'object',
                 properties: {
                   id: { type: 'string' },
+                  title: { type: 'string' },
                   is_public: { type: 'boolean' },
                   likes_count: { type: 'integer' },
                   saved_count: { type: 'integer' },
