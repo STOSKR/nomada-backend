@@ -226,7 +226,7 @@ class RouteService {
    * @returns {Promise<Object>} - Ruta creada
    */
   async createRoute(routeData, userId) {
-    const { places = [], is_public = true, cover_image = null } = routeData;
+    const { places = [], is_public = true, cover_image = null, title } = routeData;
 
     try {
       // Validación previa
@@ -234,8 +234,13 @@ class RouteService {
         throw new Error('Se requiere un usuario autenticado para crear una ruta');
       }
 
+      if (!title) {
+        throw new Error('El título de la ruta es obligatorio');
+      }
+
       console.log('Intentando crear ruta con datos:', JSON.stringify({
         userId,
+        title,
         is_public,
         cover_image,
         placesCount: places.length
@@ -246,6 +251,7 @@ class RouteService {
         .from('routes')
         .insert({
           user_id: userId,
+          title,
           is_public,
           cover_image,
           likes_count: 0,
