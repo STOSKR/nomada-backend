@@ -534,6 +534,7 @@ const schemas = {
               type: 'object',
               properties: {
                 id: { type: 'string' },
+                nomada_id: { type: 'string' },
                 username: { type: 'string' },
                 full_name: { type: 'string' },
                 avatar_url: { type: 'string' }

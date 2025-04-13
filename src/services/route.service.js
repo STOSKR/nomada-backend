@@ -770,14 +770,15 @@ class RouteService {
       // Obtener información de los usuarios de cada ruta en una sola consulta
       const userIds = [...new Set(routes.map(route => route.user_id))];
 
+      // Consulta para obtener todos los detalles necesarios de los usuarios
       const { data: users, error: usersError } = await this.supabase
         .from('users')
-        .select('id, username, full_name, avatar_url')
+        .select('id, username, avatar_url, nomada_id')
         .in('id', userIds);
 
       if (usersError) {
         console.error('Error al obtener usuarios:', usersError);
-        // Continuar sin información de usuario
+        // Continuar con información parcial de usuario
       }
 
       // Crear un mapa de usuarios para acceso rápido
@@ -788,10 +789,35 @@ class RouteService {
         });
       }
 
-      // Añadir la información de usuario a cada ruta
-      const routesWithUsers = routes.map(route => ({
-        ...route,
-        user: userMap[route.user_id] || { id: route.user_id }
+      // Para cada ruta, buscar información detallada del usuario si no está completa
+      const routesWithUsers = await Promise.all(routes.map(async route => {
+        let userData = userMap[route.user_id];
+
+        // Si no hay información completa del usuario o falta nomada_id, buscar directamente
+        if (!userData || !userData.nomada_id || !userData.full_name) {
+          const { data: userDetails, error: userDetailsError } = await this.supabase
+            .from('users')
+            .select('id, username, full_name, avatar_url, nomada_id')
+            .eq('id', route.user_id)
+            .single();
+
+          if (!userDetailsError && userDetails) {
+            userData = userDetails;
+            // Actualizar el mapa para futuros usos
+            userMap[route.user_id] = userDetails;
+          }
+        }
+
+        return {
+          ...route,
+          user: userData || {
+            id: route.user_id,
+            nomada_id: null,
+            full_name: null,
+            username: null,
+            avatar_url: null
+          }
+        };
       }));
 
       return routesWithUsers;
