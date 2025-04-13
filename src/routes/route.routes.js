@@ -31,12 +31,24 @@ const schemas = {
           properties: {
             id: { type: 'string' },
             title: { type: 'string' },
+            description: { type: 'string' }, // Nuevo campo descripción
             is_public: { type: 'boolean' },
             likes_count: { type: 'integer' },
             saved_count: { type: 'integer' },
             comments_count: { type: 'integer' },
             cover_image: { type: 'string' },
             created_at: { type: 'string', format: 'date-time' },
+            photos: { // Nueva colección de fotos
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  public_url: { type: 'string' },
+                  order_index: { type: 'integer' }
+                }
+              }
+            },
             user: {
               type: 'object',
               properties: {
@@ -70,6 +82,7 @@ const schemas = {
         properties: {
           id: { type: 'string' },
           title: { type: 'string' },
+          description: { type: 'string' },  // Nuevo campo descripción
           is_public: { type: 'boolean' },
           likes_count: { type: 'integer' },
           saved_count: { type: 'integer' },
@@ -82,6 +95,17 @@ const schemas = {
               id: { type: 'string' },
               username: { type: 'string' },
               full_name: { type: 'string' }
+            }
+          },
+          photos: {  // Nueva colección de fotos para la ruta
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                public_url: { type: 'string' },
+                order_index: { type: 'integer' }
+              }
             }
           },
           places: {
@@ -106,7 +130,6 @@ const schemas = {
                     properties: {
                       id: { type: 'string' },
                       public_url: { type: 'string' },
-                      caption: { type: 'string' },
                       order_index: { type: 'integer' }
                     }
                   }
@@ -130,8 +153,18 @@ const schemas = {
       required: ['title'],
       properties: {
         title: { type: 'string' },
+        description: { type: 'string' },  // Nuevo campo de descripción
         is_public: { type: 'boolean', default: true },
         cover_image: { type: 'string' },
+        photos: {  // Nueva colección de fotos para la ruta
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              url: { type: 'string' }
+            }
+          }
+        },
         places: {
           type: 'array',
           items: {
@@ -142,6 +175,15 @@ const schemas = {
               description: { type: 'string' },
               address: { type: 'string' },
               rating: { type: 'number' },
+              photos: {  // Fotos para cada lugar
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    url: { type: 'string' }
+                  }
+                }
+              },
               schedule: {
                 type: 'object',
                 properties: {
@@ -229,7 +271,7 @@ const schemas = {
 
   // Esquema para actualizar una ruta
   updateRoute: {
-    description: 'Actualizar una ruta de viaje existente',
+    description: 'Actualizar una ruta existente',
     tags: ['rutas'],
     security: [{ apiKey: [] }],
     params: {
@@ -242,8 +284,19 @@ const schemas = {
     body: {
       type: 'object',
       properties: {
+        title: { type: 'string' },
+        description: { type: 'string' },  // Nuevo campo descripción
         is_public: { type: 'boolean' },
-        cover_image: { type: 'string' }
+        cover_image: { type: 'string' },
+        photos: {  // Nueva colección de fotos
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              url: { type: 'string' }
+            }
+          }
+        }
       }
     },
     response: {

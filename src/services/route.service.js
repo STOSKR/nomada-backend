@@ -120,6 +120,7 @@ class RouteService {
         .select(`
           id,
           title,
+          description,
           is_public,
           likes_count,
           saved_count,
@@ -142,10 +143,22 @@ class RouteService {
         throw new Error('No tienes permiso para ver esta ruta');
       }
 
+      // Obtener fotos de la ruta
+      const { data: routePhotos, error: photosError } = await this.supabase
+        .from('route_photos')
+        .select('id, public_url, caption, order_index')
+        .eq('route_id', routeId)
+        .order('order_index', { ascending: true });
+
+      if (photosError) {
+        console.warn('Error al obtener fotos de la ruta:', photosError);
+        // Continuar sin las fotos
+      }
+
       // Obtener información del usuario creador
       const { data: user, error: userError } = await this.supabase
         .from('users')
-        .select('id, username, full_name, avatar_url')
+        .select('id, username, full_name, avatar_url, nomada_id')
         .eq('id', route.user_id)
         .single();
 
@@ -212,6 +225,7 @@ class RouteService {
       return {
         ...route,
         user: user || { id: route.user_id },
+        photos: routePhotos || [],    // Agregamos la colección de fotos
         places: placesWithFormattedSchedules || [],
         isLiked
       };
@@ -228,7 +242,14 @@ class RouteService {
    * @returns {Promise<Object>} - Ruta creada
    */
   async createRoute(routeData, userId) {
-    const { places = [], is_public = true, cover_image = null, title } = routeData;
+    const {
+      places = [],
+      is_public = true,
+      cover_image = null,
+      description = '',  // Nueva descripción
+      photos = [],       // Colección de fotos (URLs de Cloudinary)
+      title
+    } = routeData;
 
     try {
       // Validación previa
@@ -243,8 +264,10 @@ class RouteService {
       console.log('Intentando crear ruta con datos:', JSON.stringify({
         userId,
         title,
+        description,
         is_public,
         cover_image,
+        photos: photos.length,
         placesCount: places.length
       }));
 
@@ -254,6 +277,7 @@ class RouteService {
         .insert({
           user_id: userId,
           title,
+          description,      // Nuevo campo
           is_public,
           cover_image,
           likes_count: 0,
@@ -274,7 +298,30 @@ class RouteService {
 
       console.log('Ruta creada con ID:', route.id);
 
-      // 2. Crear los lugares asociados a la ruta
+      // 2. Añadir las fotos de la ruta (URLs de Cloudinary)
+      if (photos && photos.length > 0) {
+        const routePhotos = photos.map((photo, index) => {
+          return {
+            route_id: route.id,
+            public_url: photo.url,         // URL de Cloudinary
+            caption: photo.caption || '',
+            order_index: index + 1
+          };
+        });
+
+        const { error: photosError } = await this.supabase
+          .from('route_photos')
+          .insert(routePhotos);
+
+        if (photosError) {
+          console.error('Error al añadir fotos a la ruta:', photosError);
+          // Continuar con la creación aunque haya problemas con las fotos
+        } else {
+          console.log(`${routePhotos.length} fotos añadidas a la ruta`);
+        }
+      }
+
+      // 3. Crear los lugares asociados a la ruta
       if (places.length > 0) {
         const placesToInsert = places.map((place, index) => {
           const {
@@ -285,7 +332,8 @@ class RouteService {
             rating = null,
             schedule = null,
             day_number = 1,
-            order_in_day = index + 1
+            order_in_day = index + 1,
+            photos = []  // Fotos del lugar (URLs de Cloudinary)
           } = place;
 
           if (!name) {
@@ -308,15 +356,21 @@ class RouteService {
             schedule,
             day_number,
             order_in_day,
-            order_index: index + 1
+            order_index: index + 1,
+            photos: photos  // Guardaremos las fotos después
           };
         });
 
         console.log(`Intentando insertar ${placesToInsert.length} lugares`);
 
-        const { error: placesError } = await this.supabase
+        // Insertar lugares sin las fotos
+        const { data: insertedPlaces, error: placesError } = await this.supabase
           .from('places')
-          .insert(placesToInsert);
+          .insert(placesToInsert.map(p => {
+            const { photos, ...placeData } = p;
+            return placeData;
+          }))
+          .select('id, order_index');
 
         if (placesError) {
           console.error('Error al insertar lugares:', placesError);
@@ -335,6 +389,32 @@ class RouteService {
         }
 
         console.log('Lugares insertados correctamente');
+
+        // Ahora añadimos las fotos de cada lugar
+        if (insertedPlaces && insertedPlaces.length > 0) {
+          for (let i = 0; i < insertedPlaces.length; i++) {
+            const place = insertedPlaces[i];
+            const placePhotos = placesToInsert[i].photos || [];
+
+            if (placePhotos.length > 0) {
+              const photosToInsert = placePhotos.map((photo, idx) => ({
+                place_id: place.id,
+                public_url: photo.url,    // URL de Cloudinary
+                caption: photo.caption || '',
+                order_index: idx + 1
+              }));
+
+              const { error: placePhotosError } = await this.supabase
+                .from('place_photos')
+                .insert(photosToInsert);
+
+              if (placePhotosError) {
+                console.error(`Error al añadir fotos al lugar ${place.id}:`, placePhotosError);
+                // Continuar aunque haya error en las fotos
+              }
+            }
+          }
+        }
       }
 
       return {
@@ -389,7 +469,13 @@ class RouteService {
       }
 
       // Extraer campos permitidos para actualizar
-      const { is_public, cover_image } = routeData;
+      const {
+        is_public,
+        cover_image,
+        description,        // Nueva descripción
+        title,              // Permitir actualizar el título
+        photos = []         // Fotos actualizadas (URLs de Cloudinary)
+      } = routeData;
 
       // Actualizar la ruta
       const { error: updateError } = await this.supabase
@@ -397,12 +483,47 @@ class RouteService {
         .update({
           is_public,
           cover_image,
+          description,       // Actualizar descripción
+          title,             // Actualizar título si se proporcionó
           updated_at: new Date().toISOString()
         })
         .eq('id', routeId);
 
       if (updateError) {
         throw updateError;
+      }
+
+      // Actualizar fotos si se proporcionaron
+      if (photos && photos.length > 0) {
+        // Primero eliminamos las fotos existentes
+        const { error: deleteError } = await this.supabase
+          .from('route_photos')
+          .delete()
+          .eq('route_id', routeId);
+
+        if (deleteError) {
+          console.error('Error al eliminar fotos antiguas:', deleteError);
+          // Continuamos aunque haya error
+        }
+
+        // Luego insertamos las nuevas
+        const routePhotos = photos.map((photo, index) => {
+          return {
+            route_id: routeId,
+            public_url: photo.url,
+            caption: photo.caption || '',
+            order_index: index + 1
+          };
+        });
+
+        const { error: insertError } = await this.supabase
+          .from('route_photos')
+          .insert(routePhotos);
+
+        if (insertError) {
+          console.error('Error al actualizar fotos:', insertError);
+          // Continuamos aunque haya error
+        }
       }
 
       return {
@@ -739,6 +860,7 @@ class RouteService {
         .select(`
           id,
           title,
+          description,
           is_public,
           likes_count,
           saved_count,
@@ -789,8 +911,32 @@ class RouteService {
         });
       }
 
+      // Obtener todas las fotos de las rutas en una consulta
+      const routeIds = routes.map(route => route.id);
+      const { data: allPhotos, error: photosError } = await this.supabase
+        .from('route_photos')
+        .select('id, route_id, public_url, caption, order_index')
+        .in('route_id', routeIds)
+        .order('order_index', { ascending: true });
+
+      if (photosError) {
+        console.error('Error al obtener fotos de rutas:', photosError);
+        // Continuar sin fotos
+      }
+
+      // Crear un mapa de fotos por ruta
+      const photosMap = {};
+      if (allPhotos && allPhotos.length > 0) {
+        allPhotos.forEach(photo => {
+          if (!photosMap[photo.route_id]) {
+            photosMap[photo.route_id] = [];
+          }
+          photosMap[photo.route_id].push(photo);
+        });
+      }
+
       // Para cada ruta, buscar información detallada del usuario si no está completa
-      const routesWithUsers = await Promise.all(routes.map(async route => {
+      const routesWithDetails = await Promise.all(routes.map(async route => {
         let userData = userMap[route.user_id];
 
         // Si no hay información completa del usuario o falta nomada_id, buscar directamente
@@ -808,8 +954,12 @@ class RouteService {
           }
         }
 
+        // Añadir las fotos de la ruta
+        const routePhotos = photosMap[route.id] || [];
+
         return {
           ...route,
+          photos: routePhotos,
           user: userData || {
             id: route.user_id,
             nomada_id: null,
@@ -820,10 +970,115 @@ class RouteService {
         };
       }));
 
-      return routesWithUsers;
+      return routesWithDetails;
     } catch (error) {
       console.error('Error al obtener todas las rutas:', error);
       throw new Error(`Error al obtener las rutas: ${error.message}`);
+    }
+  }
+
+  /**
+   * Añade o actualiza fotos para un lugar específico
+   * @param {string} placeId - ID del lugar
+   * @param {Array} photos - Fotos a añadir (URLs de Cloudinary)
+   * @param {string} userId - ID del usuario que realiza la acción
+   * @returns {Promise<Object>} - Resultado de la operación
+   */
+  async updatePlacePhotos(placeId, photos, userId) {
+    try {
+      // Verificar que el lugar existe
+      const { data: place, error: placeError } = await this.supabase
+        .from('places')
+        .select('id, route_id')
+        .eq('id', placeId)
+        .single();
+
+      if (placeError || !place) {
+        throw new Error('Lugar no encontrado');
+      }
+
+      // Verificar que el usuario tiene permisos para modificar este lugar
+      const { data: route, error: routeError } = await this.supabase
+        .from('routes')
+        .select('id, user_id')
+        .eq('id', place.route_id)
+        .single();
+
+      if (routeError || !route) {
+        throw new Error('No se pudo verificar la ruta asociada al lugar');
+      }
+
+      if (route.user_id !== userId) {
+        throw new Error('No tienes permiso para modificar este lugar');
+      }
+
+      // Eliminar fotos existentes
+      const { error: deleteError } = await this.supabase
+        .from('place_photos')
+        .delete()
+        .eq('place_id', placeId);
+
+      if (deleteError) {
+        console.error('Error al eliminar fotos existentes:', deleteError);
+        // Continuamos aunque haya error
+      }
+
+      // Si no hay fotos nuevas, terminamos aquí
+      if (!photos || photos.length === 0) {
+        return {
+          success: true,
+          message: 'Fotos eliminadas correctamente'
+        };
+      }
+
+      // Añadir nuevas fotos
+      const photosToInsert = photos.map((photo, index) => ({
+        place_id: placeId,
+        public_url: photo.url,
+        caption: photo.caption || '',
+        order_index: index + 1
+      }));
+
+      const { error: insertError } = await this.supabase
+        .from('place_photos')
+        .insert(photosToInsert);
+
+      if (insertError) {
+        throw new Error(`Error al añadir fotos: ${insertError.message}`);
+      }
+
+      return {
+        success: true,
+        message: 'Fotos actualizadas correctamente'
+      };
+    } catch (error) {
+      console.error('Error al actualizar fotos del lugar:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene las fotos de un lugar específico
+   * @param {string} placeId - ID del lugar
+   * @returns {Promise<Array>} - Lista de fotos del lugar
+   */
+  async getPlacePhotos(placeId) {
+    try {
+      const { data, error } = await this.supabase
+        .from('place_photos')
+        .select('id, public_url, caption, order_index')
+        .eq('place_id', placeId)
+        .order('order_index', { ascending: true });
+
+      if (error) {
+        console.error('Error al obtener fotos del lugar:', error);
+        throw new Error('Error al obtener las fotos');
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error completo al obtener fotos del lugar:', error);
+      throw error;
     }
   }
 }
