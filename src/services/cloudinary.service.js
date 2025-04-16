@@ -25,8 +25,6 @@ class CloudinaryService {
    */
   async uploadImage(file, options = {}) {
     try {
-      console.log('CloudinaryService.uploadImage - Iniciando subida');
-      
       // Verificar tipo de entrada
       const isBuffer = Buffer.isBuffer(file);
       const isString = typeof file === 'string';
@@ -34,8 +32,6 @@ class CloudinaryService {
       if (!file || (!isBuffer && !isString)) {
         throw new Error('El archivo debe ser un buffer o una ruta válida');
       }
-      
-      console.log('Tipo de archivo:', isBuffer ? 'Buffer' : 'Ruta de archivo');
       
       // Si es una ruta, verificar que el archivo existe
       if (isString) {
@@ -45,14 +41,9 @@ class CloudinaryService {
         // Convertir a ruta absoluta si es necesario
         const filePath = path.isAbsolute(file) ? file : path.resolve(file);
         
-        console.log('Verificando archivo para subir a Cloudinary:', filePath);
-        
         if (!fs.existsSync(filePath)) {
           throw new Error(`El archivo no existe en la ruta: ${filePath}`);
         }
-        
-        console.log('Archivo verificado con éxito, tamaño:', 
-          fs.statSync(filePath).size, 'bytes');
       }
 
       const defaultOptions = {
@@ -68,17 +59,11 @@ class CloudinaryService {
         ]
       };
       
-      console.log('CloudinaryService - Opciones de subida:', {
-        ...defaultOptions,
-        ...options,
-      });
-      
       const uploadOptions = { ...defaultOptions, ...options };
       
       // Usar stream_upload si es un buffer para mayor eficiencia
       let result;
       if (isBuffer) {
-        console.log('Subiendo como stream desde buffer');
         result = await new Promise((resolve, reject) => {
           const stream = require('stream');
           const bufferStream = new stream.PassThrough();
@@ -88,7 +73,6 @@ class CloudinaryService {
             uploadOptions,
             (error, result) => {
               if (error) {
-                console.error('Error en upload_stream:', error);
                 return reject(error);
               }
               resolve(result);
@@ -99,15 +83,8 @@ class CloudinaryService {
         });
       } else {
         // Subida normal para ruta de archivo
-        console.log('Subiendo desde ruta de archivo');
         result = await this.cloudinary.uploader.upload(file, uploadOptions);
       }
-      
-      console.log('CloudinaryService - Imagen subida exitosamente:', {
-        public_id: result.public_id,
-        format: result.format,
-        bytes: result.bytes
-      });
       
       return {
         public_id: result.public_id,
@@ -120,7 +97,6 @@ class CloudinaryService {
         secure_url: result.secure_url
       };
     } catch (error) {
-      console.error('Error al subir imagen a Cloudinary:', error);
       throw new Error(`Error al subir imagen: ${error.message}`);
     }
   }

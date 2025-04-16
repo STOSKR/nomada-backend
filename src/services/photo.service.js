@@ -375,14 +375,6 @@ class PhotoService {
                 throw new Error('El ID de usuario es requerido');
             }
 
-            // Añadir logs para depuración
-            console.log('Iniciando subida de foto con:');
-            console.log('- Tipo de fileData:', typeof fileData);
-            console.log('- Es Buffer:', Buffer.isBuffer(fileData));
-            console.log('- Filename:', filename);
-            console.log('- UserID:', userId);
-            console.log('- Datos adicionales:', JSON.stringify(additionalData));
-
             // Generar un nombre seguro para el archivo
             const safeFilename = this.sanitizeFilename(filename);
             
@@ -395,12 +387,8 @@ class PhotoService {
                 fetch_format: 'auto'
             };
             
-            console.log('Configuración de subida a Cloudinary:', uploadOptions);
-            
             // Subir a Cloudinary con optimizaciones aplicadas
             const uploadResult = await this.cloudinary.uploadImage(fileData, uploadOptions);
-
-            console.log('Imagen subida correctamente a Cloudinary:', uploadResult.secure_url);
 
             // Registrar en base de datos
             const photoData = {
@@ -415,7 +403,6 @@ class PhotoService {
 
             return await this.createPhoto(photoData, userId);
         } catch (error) {
-            console.error('Error en subida y registro de foto:', error);
             throw new Error(`Error al subir y registrar foto: ${error.message}`);
         }
     }
@@ -428,7 +415,6 @@ class PhotoService {
     sanitizeFilename(filename) {
         // Verificar si filename es undefined o no es un string
         if (!filename || typeof filename !== 'string') {
-            console.warn('Nombre de archivo inválido:', filename);
             // Generar un nombre de archivo predeterminado con timestamp
             return `file_${Date.now()}.jpg`;
         }

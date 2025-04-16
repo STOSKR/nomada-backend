@@ -226,15 +226,6 @@ async function photoRoutes(fastify, options) {
 
     // Middleware para imprimir información de depuración antes de la autenticación
     const debugRequestMiddleware = (request, reply, done) => {
-        console.log('\n----- INFORMACIÓN DE DEPURACIÓN -----');
-        console.log('URI de la solicitud:', request.url);
-        console.log('Método HTTP:', request.method);
-        console.log('Encabezados recibidos:', JSON.stringify(request.headers, null, 2));
-        console.log('Authorization:', request.headers.authorization || 'No proporcionado');
-        console.log('Content-Type:', request.headers['content-type'] || 'No especificado');
-        console.log('Body (parcial):', request.body ? Object.keys(request.body) : 'No disponible');
-        console.log('Query params:', request.query);
-        console.log('----------------------------------\n');
         done();
     };
 
@@ -244,7 +235,6 @@ async function photoRoutes(fastify, options) {
         preValidation: [debugRequestMiddleware, fastify.authenticate]
     }, async (request, reply) => {
         try {
-            console.log('Iniciando proceso de subida directa de foto');
             const userId = request.user.id;
             
             // Procesar la subida usando @fastify/multipart directamente
@@ -257,8 +247,6 @@ async function photoRoutes(fastify, options) {
             // Procesar cada parte del multipart
             for await (const part of parts) {
                 if (part.type === 'file') {
-                    console.log('Parte de archivo recibida:', part.filename);
-                    
                     // Guardar información del archivo
                     fileInfo = {
                         filename: part.filename,
@@ -269,20 +257,16 @@ async function photoRoutes(fastify, options) {
                     
                     // Leer el archivo como buffer
                     fileBuffer = await part.toBuffer();
-                    console.log(`Archivo leído como buffer: ${fileBuffer.length} bytes`);
                 }
             }
             
             // Verificar si se recibió un archivo
             if (!fileBuffer || !fileInfo) {
-                console.log('ERROR: No se encontró ningún archivo en la solicitud multipart');
                 return reply.code(400).send({
                     success: false,
                     message: 'No se ha proporcionado ningún archivo'
                 });
             }
-            
-            console.log('Archivo recibido correctamente. Detalles:', fileInfo);
             
             // Subir directamente a Cloudinary sin guardar en base de datos
             const safeFilename = photoService.sanitizeFilename(fileInfo.filename || `upload_${Date.now()}`);
@@ -309,7 +293,6 @@ async function photoRoutes(fastify, options) {
                 size: uploadResult.bytes
             };
         } catch (error) {
-            console.error('Error en la subida directa:', error);
             request.log.error(error);
             
             return reply.code(400).send({

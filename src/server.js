@@ -104,13 +104,7 @@ async function registerPlugins() {
     try {
       const authHeader = request.headers.authorization;
 
-      console.log('\n----- DEBUG AUTENTICACIÓN -----');
-      console.log('Ruta solicitada:', request.url);
-      console.log('Encabezado de autenticación:', authHeader || 'No proporcionado');
-
       if (!authHeader) {
-        console.log('ERROR: No se proporcionó token de autenticación');
-        console.log('-----------------------------\n');
         throw new Error('No se proporcionó token de autenticación');
       }
 
@@ -119,19 +113,12 @@ async function registerPlugins() {
       // Si contiene "Bearer ", quitarlo para mantener compatibilidad
       if (authHeader.startsWith('Bearer ')) {
         token = authHeader.replace('Bearer ', '');
-        console.log('Token (después de quitar Bearer):', token.substring(0, 15) + '...');
-      } else {
-        console.log('Token (sin Bearer):', token.substring(0, 15) + '...');
       }
 
       try {
         const decoded = await fastify.jwt.verify(token);
-        console.log('Token decodificado correctamente, ID de usuario:', decoded.id);
-        console.log('-----------------------------\n');
         request.user = { id: decoded.id };
       } catch (err) {
-        console.log('ERROR al verificar JWT:', err.message);
-        console.log('-----------------------------\n');
         request.log.error(`Error de verificación JWT: ${err.message}`);
         throw new Error('Token de autenticación inválido');
       }
@@ -148,14 +135,8 @@ async function registerPlugins() {
     try {
       const authHeader = request.headers.authorization;
 
-      console.log('\n----- DEBUG AUTENTICACIÓN OPCIONAL -----');
-      console.log('Ruta solicitada:', request.url);
-      console.log('Encabezado de autenticación:', authHeader || 'No proporcionado');
-
       if (!authHeader) {
         // Continuar sin autenticación
-        console.log('Sin token, continuando sin autenticación');
-        console.log('-------------------------------------\n');
         return;
       }
 
@@ -164,27 +145,18 @@ async function registerPlugins() {
       // Si contiene "Bearer ", quitarlo para mantener compatibilidad
       if (authHeader.startsWith('Bearer ')) {
         token = authHeader.replace('Bearer ', '');
-        console.log('Token (después de quitar Bearer):', token.substring(0, 15) + '...');
-      } else {
-        console.log('Token (sin Bearer):', token.substring(0, 15) + '...');
       }
 
       try {
         const decoded = await fastify.jwt.verify(token);
         const user = { id: decoded.id };
         request.user = user;
-        console.log('Token decodificado correctamente, ID de usuario:', decoded.id);
-        console.log('-------------------------------------\n');
       } catch (error) {
         // Error en token, pero seguimos sin autenticación
-        console.log('ERROR al verificar JWT, pero continuando:', error.message);
-        console.log('-------------------------------------\n');
         return;
       }
     } catch (err) {
       // Continuar sin autenticación en caso de cualquier error
-      console.log('Error general, continuando sin autenticación:', err.message);
-      console.log('-------------------------------------\n');
     }
   });
 
@@ -283,11 +255,9 @@ process.on('unhandledRejection', (reason, promise) => {
 async function start() {
   try {
     // Asegurarnos de que primero se registran los plugins
-    console.log(`\n${colors.yellow}▶ Inicialización:${colors.reset} Cargando plugins...`);
     await registerPlugins();
 
     // Después registrar las rutas
-    console.log(`${colors.yellow}▶ Inicialización:${colors.reset} Configurando rutas...`);
     await registerRoutes();
 
     // Iniciar servidor - intentar con puerto inicial
@@ -296,15 +266,12 @@ async function start() {
     let attempts = 0;
     let listening = false;
 
-    console.log(`${colors.yellow}▶ Servidor:${colors.reset} Iniciando en puerto ${colors.cyan}${currentPort}${colors.reset}`);
-
     while (!listening && attempts < maxAttempts) {
       try {
         await fastify.listen({ port: currentPort, host: HOST });
         listening = true;
       } catch (listenError) {
         if (listenError.code === 'EADDRINUSE') {
-          console.log(`${colors.yellow}▶ Puerto ${currentPort}:${colors.reset} ${colors.magenta}En uso${colors.reset}, intentando con ${colors.cyan}${currentPort + 1}${colors.reset}...`);
           currentPort++;
           attempts++;
         } else {
