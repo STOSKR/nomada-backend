@@ -358,16 +358,16 @@ class PhotoService {
 
     /**
      * Sube una imagen directamente a Cloudinary y la registra
-     * @param {Buffer|string} fileBuffer - Archivo de imagen o ruta temporal
+     * @param {Buffer|string} fileData - Archivo de imagen (buffer) o ruta temporal
      * @param {string} filename - Nombre original del archivo
      * @param {string} userId - ID del usuario
      * @param {Object} additionalData - Datos adicionales (place_id, position)
      * @returns {Promise<Object>} - Foto registrada
      */
-    async uploadAndRegisterPhoto(fileBuffer, filename, userId, additionalData = {}) {
+    async uploadAndRegisterPhoto(fileData, filename, userId, additionalData = {}) {
         try {
             // Verificar si los parámetros son válidos
-            if (!fileBuffer) {
+            if (!fileData) {
                 throw new Error('El archivo de imagen es requerido');
             }
             
@@ -377,16 +377,28 @@ class PhotoService {
 
             // Añadir logs para depuración
             console.log('Iniciando subida de foto con:');
-            console.log('- Tipo de fileBuffer:', typeof fileBuffer);
+            console.log('- Tipo de fileData:', typeof fileData);
+            console.log('- Es Buffer:', Buffer.isBuffer(fileData));
             console.log('- Filename:', filename);
             console.log('- UserID:', userId);
             console.log('- Datos adicionales:', JSON.stringify(additionalData));
 
-            // Subir a Cloudinary con optimizaciones aplicadas
-            const uploadResult = await this.cloudinary.uploadImage(fileBuffer, {
+            // Generar un nombre seguro para el archivo
+            const safeFilename = this.sanitizeFilename(filename);
+            
+            // Configuración para Cloudinary
+            const uploadOptions = {
                 folder: `nomada/users/${userId}/photos`,
-                public_id: this.sanitizeFilename(filename).split('.')[0]
-            });
+                public_id: safeFilename.split('.')[0],
+                // Optimizaciones
+                quality: 'auto',
+                fetch_format: 'auto'
+            };
+            
+            console.log('Configuración de subida a Cloudinary:', uploadOptions);
+            
+            // Subir a Cloudinary con optimizaciones aplicadas
+            const uploadResult = await this.cloudinary.uploadImage(fileData, uploadOptions);
 
             console.log('Imagen subida correctamente a Cloudinary:', uploadResult.secure_url);
 

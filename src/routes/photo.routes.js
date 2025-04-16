@@ -21,10 +21,7 @@ const schemas = {
         consumes: ['multipart/form-data'],
         body: {
             type: 'object',
-            properties: {
-                place_id: { type: 'string' },
-                position: { type: 'string' }
-            }
+            properties: {}
         },
         response: {
             200: {
@@ -55,9 +52,7 @@ const schemas = {
             required: ['image'],
             properties: {
                 image: { type: 'string' },
-                filename: { type: 'string' },
-                place_id: { type: 'string' },
-                position: { type: 'string' }
+                filename: { type: 'string' }
             }
         },
         response: {
@@ -249,87 +244,69 @@ async function photoRoutes(fastify, options) {
         done();
     };
 
-    // Subir foto directamente
+    // Subir foto directamente (nueva implementación usando @fastify/multipart)
     fastify.post('/upload', {
         schema: schemas.uploadPhoto,
-        preValidation: [debugRequestMiddleware, fastify.authenticate],
-        preHandler: multerHandler('photo')
+        preValidation: [debugRequestMiddleware, fastify.authenticate]
     }, async (request, reply) => {
         try {
+            console.log('Iniciando proceso de subida directa de foto');
             const userId = request.user.id;
-            const file = request.file;
             
-            // Verificar si tenemos un archivo
-            if (!file) {
-                console.log('ERROR: No se ha proporcionado ningún archivo en la solicitud');
+            // Procesar la subida usando @fastify/multipart directamente
+            const parts = request.parts();
+            
+            // Variables para almacenar la imagen y los campos
+            let fileBuffer = null;
+            let fileInfo = null;
+            
+            // Procesar cada parte del multipart
+            for await (const part of parts) {
+                if (part.type === 'file') {
+                    console.log('Parte de archivo recibida:', part.filename);
+                    
+                    // Guardar información del archivo
+                    fileInfo = {
+                        filename: part.filename,
+                        mimetype: part.mimetype,
+                        encoding: part.encoding,
+                        fieldname: part.fieldname
+                    };
+                    
+                    // Leer el archivo como buffer
+                    fileBuffer = await part.toBuffer();
+                    console.log(`Archivo leído como buffer: ${fileBuffer.length} bytes`);
+                }
+            }
+            
+            // Verificar si se recibió un archivo
+            if (!fileBuffer || !fileInfo) {
+                console.log('ERROR: No se encontró ningún archivo en la solicitud multipart');
                 return reply.code(400).send({
                     success: false,
                     message: 'No se ha proporcionado ningún archivo'
                 });
             }
-
-            // Log para debugging detallado
-            console.log('-------- DATOS DE LA SOLICITUD DE SUBIDA --------');
-            console.log('request.body:', request.body);
-            console.log('place_id:', request.body.place_id);
-            console.log('position:', request.body.position);
-            console.log('FILE INFO:', {
-                fieldname: file.fieldname,
-                originalname: file.originalname,
-                encoding: file.encoding,
-                mimetype: file.mimetype,
-                size: file.size,
-                path: file.path,
-                exists: fs.existsSync(file.path)
-            });
-            console.log('----------------------------------------------');
-
-            // Verificar que el archivo existe y es accesible
-            if (!fs.existsSync(file.path)) {
-                throw new Error(`El archivo temporal no existe en la ruta: ${file.path}`);
-            }
-
-            // Obtener los campos adicionales
-            const place_id = request.body.place_id;
-            const position = request.body.position;
             
-            const additionalData = {};
-            if (place_id) additionalData.place_id = place_id;
-            if (position) additionalData.position = position;
-
-            // Subir a Cloudinary y registrar
+            console.log('Archivo recibido correctamente. Detalles:', fileInfo);
+            
+            // Subir directamente a Cloudinary sin guardar archivos temporales
             const photo = await photoService.uploadAndRegisterPhoto(
-                file.path,
-                file.originalname || `upload_${Date.now()}`,
+                fileBuffer,
+                fileInfo.filename || `upload_${Date.now()}`,
                 userId,
-                additionalData
+                {}  // Sin datos adicionales
             );
-
-            // Eliminar archivo temporal
-            await unlinkFile(file.path);
-
+            
             return {
                 success: true,
                 message: 'Foto subida y registrada correctamente',
-                photo,
-                debug: {
-                    receivedPlaceId: place_id || null,
-                    receivedPosition: position || null,
-                    bodyKeys: Object.keys(request.body)
-                }
+                photo
             };
         } catch (error) {
+            console.error('Error en la subida directa:', error);
             request.log.error(error);
             
-            // Intentar eliminar el archivo temporal si existe
-            if (request.file && request.file.path) {
-                try {
-                    await unlinkFile(request.file.path);
-                } catch (unlinkError) {
-                    request.log.error('Error al eliminar archivo temporal:', unlinkError);
-                }
-            }
-
             return reply.code(400).send({
                 success: false,
                 message: error.message
@@ -344,7 +321,7 @@ async function photoRoutes(fastify, options) {
     }, async (request, reply) => {
         try {
             const userId = request.user.id;
-            const { image, filename, place_id, position } = request.body;
+            const { image, filename } = request.body;
             
             if (!image) {
                 return reply.code(400).send({
@@ -381,17 +358,12 @@ async function photoRoutes(fastify, options) {
             const buffer = Buffer.from(base64Data, 'base64');
             await writeFile(tempFilePath, buffer);
 
-            // Agregar datos adicionales
-            const additionalData = {};
-            if (place_id) additionalData.place_id = place_id;
-            if (position) additionalData.position = position;
-
             // Subir a Cloudinary y registrar
             const photo = await photoService.uploadAndRegisterPhoto(
                 tempFilePath,
                 tempFilename,
                 userId,
-                additionalData
+                {}  // Sin datos adicionales
             );
 
             // Eliminar archivo temporal

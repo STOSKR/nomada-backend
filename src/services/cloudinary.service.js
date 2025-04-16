@@ -19,14 +19,26 @@ class CloudinaryService {
 
   /**
    * Sube una imagen a Cloudinary
-   * @param {Buffer|string} file - Archivo de imagen o ruta temporal
+   * @param {Buffer|string} file - Archivo de imagen (buffer) o ruta temporal
    * @param {Object} options - Opciones adicionales
    * @returns {Promise<Object>} - Resultado de la subida
    */
   async uploadImage(file, options = {}) {
     try {
-      // Verificar si el archivo existe si es una ruta
-      if (typeof file === 'string') {
+      console.log('CloudinaryService.uploadImage - Iniciando subida');
+      
+      // Verificar tipo de entrada
+      const isBuffer = Buffer.isBuffer(file);
+      const isString = typeof file === 'string';
+      
+      if (!file || (!isBuffer && !isString)) {
+        throw new Error('El archivo debe ser un buffer o una ruta válida');
+      }
+      
+      console.log('Tipo de archivo:', isBuffer ? 'Buffer' : 'Ruta de archivo');
+      
+      // Si es una ruta, verificar que el archivo existe
+      if (isString) {
         const fs = require('fs');
         const path = require('path');
         
@@ -41,8 +53,6 @@ class CloudinaryService {
         
         console.log('Archivo verificado con éxito, tamaño:', 
           fs.statSync(filePath).size, 'bytes');
-      } else {
-        console.log('Subiendo contenido de buffer a Cloudinary');
       }
 
       const defaultOptions = {
@@ -58,17 +68,43 @@ class CloudinaryService {
         ]
       };
       
-      console.log('Configurando opciones de subida a Cloudinary:', {
+      console.log('CloudinaryService - Opciones de subida:', {
         ...defaultOptions,
-        ...options
+        ...options,
       });
       
       const uploadOptions = { ...defaultOptions, ...options };
-      const result = await this.cloudinary.uploader.upload(file, uploadOptions);
       
-      console.log('Imagen subida exitosamente a Cloudinary:', {
+      // Usar stream_upload si es un buffer para mayor eficiencia
+      let result;
+      if (isBuffer) {
+        console.log('Subiendo como stream desde buffer');
+        result = await new Promise((resolve, reject) => {
+          const stream = require('stream');
+          const bufferStream = new stream.PassThrough();
+          bufferStream.end(file);
+          
+          const uploadStream = this.cloudinary.uploader.upload_stream(
+            uploadOptions,
+            (error, result) => {
+              if (error) {
+                console.error('Error en upload_stream:', error);
+                return reject(error);
+              }
+              resolve(result);
+            }
+          );
+          
+          bufferStream.pipe(uploadStream);
+        });
+      } else {
+        // Subida normal para ruta de archivo
+        console.log('Subiendo desde ruta de archivo');
+        result = await this.cloudinary.uploader.upload(file, uploadOptions);
+      }
+      
+      console.log('CloudinaryService - Imagen subida exitosamente:', {
         public_id: result.public_id,
-        secure_url: result.secure_url,
         format: result.format,
         bytes: result.bytes
       });
