@@ -29,14 +29,11 @@ const schemas = {
                 properties: {
                     success: { type: 'boolean' },
                     message: { type: 'string' },
-                    photo: {
-                        type: 'object',
-                        properties: {
-                            id: { type: 'string' },
-                            filename: { type: 'string' },
-                            public_url: { type: 'string' }
-                        }
-                    }
+                    url: { type: 'string' },
+                    width: { type: 'integer' },
+                    height: { type: 'integer' },
+                    format: { type: 'string' },
+                    size: { type: 'integer' }
                 }
             }
         }
@@ -61,14 +58,11 @@ const schemas = {
                 properties: {
                     success: { type: 'boolean' },
                     message: { type: 'string' },
-                    photo: {
-                        type: 'object',
-                        properties: {
-                            id: { type: 'string' },
-                            filename: { type: 'string' },
-                            public_url: { type: 'string' }
-                        }
-                    }
+                    url: { type: 'string' },
+                    width: { type: 'integer' },
+                    height: { type: 'integer' },
+                    format: { type: 'string' },
+                    size: { type: 'integer' }
                 }
             }
         }
@@ -290,18 +284,29 @@ async function photoRoutes(fastify, options) {
             
             console.log('Archivo recibido correctamente. Detalles:', fileInfo);
             
-            // Subir directamente a Cloudinary sin guardar archivos temporales
-            const photo = await photoService.uploadAndRegisterPhoto(
-                fileBuffer,
-                fileInfo.filename || `upload_${Date.now()}`,
-                userId,
-                {}  // Sin datos adicionales
-            );
+            // Subir directamente a Cloudinary sin guardar en base de datos
+            const safeFilename = photoService.sanitizeFilename(fileInfo.filename || `upload_${Date.now()}`);
+            
+            // Configuración para Cloudinary
+            const uploadOptions = {
+                folder: `nomada/users/${userId}/photos`,
+                public_id: safeFilename.split('.')[0],
+                // Optimizaciones
+                quality: 'auto',
+                fetch_format: 'auto'
+            };
+            
+            // Subir a Cloudinary directamente
+            const uploadResult = await photoService.cloudinary.uploadImage(fileBuffer, uploadOptions);
             
             return {
                 success: true,
-                message: 'Foto subida y registrada correctamente',
-                photo
+                message: 'Foto subida correctamente',
+                url: uploadResult.secure_url,
+                width: uploadResult.width,
+                height: uploadResult.height,
+                format: uploadResult.format,
+                size: uploadResult.bytes
             };
         } catch (error) {
             console.error('Error en la subida directa:', error);
@@ -330,7 +335,7 @@ async function photoRoutes(fastify, options) {
                 });
             }
 
-            // Validar formato base64
+            // Procesar base64
             let base64Data = image;
             let fileExt = 'jpg';
             let tempFilename = filename || `temp_${Date.now()}.${fileExt}`;
@@ -353,26 +358,32 @@ async function photoRoutes(fastify, options) {
                 }
             }
 
-            // Crear archivo temporal
-            const tempFilePath = path.join('uploads', tempFilename);
+            // Convertir base64 a buffer directamente
             const buffer = Buffer.from(base64Data, 'base64');
-            await writeFile(tempFilePath, buffer);
-
-            // Subir a Cloudinary y registrar
-            const photo = await photoService.uploadAndRegisterPhoto(
-                tempFilePath,
-                tempFilename,
-                userId,
-                {}  // Sin datos adicionales
-            );
-
-            // Eliminar archivo temporal
-            await unlinkFile(tempFilePath);
-
+            
+            // Generar un nombre seguro
+            const safeFilename = photoService.sanitizeFilename(tempFilename);
+            
+            // Configuración para Cloudinary
+            const uploadOptions = {
+                folder: `nomada/users/${userId}/photos`,
+                public_id: safeFilename.split('.')[0],
+                // Optimizaciones
+                quality: 'auto',
+                fetch_format: 'auto'
+            };
+            
+            // Subir a Cloudinary directamente sin archivos temporales
+            const uploadResult = await photoService.cloudinary.uploadImage(buffer, uploadOptions);
+            
             return {
                 success: true,
-                message: 'Foto en base64 subida y registrada correctamente',
-                photo
+                message: 'Foto en base64 subida correctamente',
+                url: uploadResult.secure_url,
+                width: uploadResult.width,
+                height: uploadResult.height,
+                format: uploadResult.format,
+                size: uploadResult.bytes
             };
         } catch (error) {
             request.log.error(error);
