@@ -1,6 +1,8 @@
 /**
  * Servicio para la gestión de fotos
  */
+const CloudinaryService = require('./cloudinary.service');
+
 class PhotoService {
     /**
      * Constructor
@@ -8,7 +10,7 @@ class PhotoService {
      */
     constructor(supabase) {
         this.supabase = supabase;
-        this.storage = supabase.storage;
+        this.cloudinary = new CloudinaryService();
     }
 
     /**
@@ -31,7 +33,8 @@ class PhotoService {
         size,
         mime_type,
         created_at,
-        place_id
+        place_id,
+        position
       `)
             .eq('user_id', userId)
             .order('created_at', { ascending: false })
@@ -40,6 +43,28 @@ class PhotoService {
         if (error) {
             console.error('Error al obtener fotos del usuario:', error);
             throw new Error('Error al obtener las fotos');
+        }
+
+        // Optimizar URLs de las imágenes para la vista de listado
+        if (data && data.length > 0) {
+            data.forEach(photo => {
+                if (photo.public_url && photo.public_url.includes('cloudinary.com')) {
+                    try {
+                        const publicId = this.cloudinary.extractPublicId(photo.public_url);
+                        photo.optimized_url = this.cloudinary.getOptimizedUrl(publicId, {
+                            width: 600,
+                            crop: 'scale',
+                            fetch_format: 'auto',
+                            quality: 'auto'
+                        });
+                    } catch (error) {
+                        console.warn('No se pudo optimizar la URL de la foto:', error);
+                        photo.optimized_url = photo.public_url;
+                    }
+                } else {
+                    photo.optimized_url = photo.public_url;
+                }
+            });
         }
 
         return data || [];
@@ -64,6 +89,7 @@ class PhotoService {
         mime_type,
         created_at,
         place_id,
+        position,
         caption,
         user_id
       `)
@@ -100,6 +126,17 @@ class PhotoService {
             throw new Error('No tienes permiso para ver esta foto');
         }
 
+        // Generar URLs optimizadas para diferentes tamaños
+        if (photo.public_url && photo.public_url.includes('cloudinary.com')) {
+            try {
+                const publicId = this.cloudinary.extractPublicId(photo.public_url);
+                const variants = this.cloudinary.generateImageVariants(publicId);
+                photo.variants = variants;
+            } catch (error) {
+                console.warn('No se pudieron generar variantes para la foto:', error);
+            }
+        }
+
         return photo;
     }
 
@@ -116,7 +153,9 @@ class PhotoService {
             width,
             height,
             size,
-            mime_type
+            mime_type,
+            place_id,
+            position
         } = photoData;
 
         // Validar datos mínimos
@@ -134,7 +173,9 @@ class PhotoService {
                 width: width || null,
                 height: height || null,
                 size: size || null,
-                mime_type: mime_type || null
+                mime_type: mime_type || null,
+                place_id: place_id || null,
+                position: position || null
             })
             .select('id, filename, public_url')
             .single();
@@ -172,7 +213,7 @@ class PhotoService {
         }
 
         // Campos permitidos para actualización
-        const allowedFields = ['filename', 'caption'];
+        const allowedFields = ['filename', 'caption', 'place_id', 'position'];
 
         // Filtrar solo los campos permitidos
         const filteredData = Object.keys(updateData)
@@ -187,7 +228,7 @@ class PhotoService {
             .from('photos')
             .update(filteredData)
             .eq('id', photoId)
-            .select('id, filename, public_url, caption')
+            .select('id, filename, public_url, caption, place_id, position')
             .single();
 
         if (error) {
@@ -232,28 +273,14 @@ class PhotoService {
             throw new Error('Error al eliminar la foto');
         }
 
-        // Intentar eliminar el archivo de Storage
+        // Intentar eliminar el archivo de Cloudinary
         try {
-            // Extraer la ruta del archivo desde la URL
-            const publicUrl = photo.public_url;
-            if (publicUrl && publicUrl.includes('storage/v1/object/public/')) {
-                const bucketPath = publicUrl.split('storage/v1/object/public/')[1];
-                const [bucket, ...pathParts] = bucketPath.split('/');
-                const path = pathParts.join('/');
-
-                if (bucket && path) {
-                    const { error: storageError } = await this.storage
-                        .from(bucket)
-                        .remove([path]);
-
-                    if (storageError) {
-                        console.warn('No se pudo eliminar el archivo de almacenamiento:', storageError);
-                        // No lanzamos error ya que la foto ya se eliminó de la BD
-                    }
-                }
+            if (photo.public_url && photo.public_url.includes('cloudinary.com')) {
+                const publicId = this.cloudinary.extractPublicId(photo.public_url);
+                await this.cloudinary.deleteImage(publicId);
             }
         } catch (storageError) {
-            console.warn('Error al procesar eliminación del archivo:', storageError);
+            console.warn('Error al eliminar el archivo de Cloudinary:', storageError);
             // No lanzamos error ya que la foto ya se eliminó de la BD
         }
 
@@ -261,10 +288,10 @@ class PhotoService {
     }
 
     /**
-     * Obtiene una URL firmada para subir una foto
+     * Obtiene una URL firmada para subir una foto a Cloudinary
      * @param {string} filename - Nombre del archivo
      * @param {string} userId - ID del usuario
-     * @returns {Promise<Object>} - URL firmada y datos para la subida
+     * @returns {Promise<Object>} - Datos para la subida
      */
     async getUploadUrl(filename, userId) {
         if (!filename) {
@@ -274,33 +301,92 @@ class PhotoService {
         // Sanitizar el nombre del archivo
         const sanitizedFilename = this.sanitizeFilename(filename);
 
-        // Crear una ruta única para evitar colisiones
-        const timestamp = new Date().getTime();
-        const uniquePath = `${userId}/${timestamp}_${sanitizedFilename}`;
-
-        // Obtener una URL firmada para subir el archivo
         try {
-            const { data, error } = await this.storage
-                .from('photos')
-                .createSignedUploadUrl(uniquePath);
-
-            if (error) {
-                console.error('Error al crear URL firmada:', error);
-                throw new Error('Error al generar URL de subida');
-            }
-
-            // Construir la URL pública anticipada
-            const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/photos/${uniquePath}`;
-
+            // Generar firma para subida directa a Cloudinary
+            const folder = `nomada/users/${userId}/photos`;
+            const signatureData = this.cloudinary.generateUploadSignature({ folder });
+            
+            // Construir datos de respuesta
             return {
-                signedUrl: data.signedUrl,
-                path: data.path,
-                publicUrl,
-                key: uniquePath
+                signedUrl: null, // No se usa en subida directa a Cloudinary
+                path: `${folder}/${sanitizedFilename}`,
+                publicUrl: `https://res.cloudinary.com/${signatureData.cloudName}/image/upload/v1/${folder}/${sanitizedFilename}`,
+                key: `${folder}/${sanitizedFilename}`,
+                uploadData: {
+                    signature: signatureData.signature,
+                    timestamp: signatureData.timestamp,
+                    cloudName: signatureData.cloudName,
+                    apiKey: signatureData.apiKey,
+                    folder: signatureData.folder,
+                    transformation: signatureData.transformation,
+                    eager: signatureData.eager
+                }
             };
         } catch (error) {
-            console.error('Error en la generación de URL firmada:', error);
+            console.error('Error en la generación de firma para Cloudinary:', error);
             throw new Error('Error al procesar la solicitud de subida');
+        }
+    }
+
+    /**
+     * Procesa una foto subida directamente a Cloudinary
+     * @param {Object} cloudinaryData - Datos de respuesta de Cloudinary
+     * @param {string} userId - ID del usuario
+     * @param {Object} additionalData - Datos adicionales (place_id, position)
+     * @returns {Promise<Object>} - Foto registrada
+     */
+    async processCloudinaryUpload(cloudinaryData, userId, additionalData = {}) {
+        try {
+            // Extraer datos relevantes de la respuesta de Cloudinary
+            const photoData = {
+                filename: cloudinaryData.original_filename || 'uploaded_image',
+                public_url: cloudinaryData.secure_url,
+                width: cloudinaryData.width,
+                height: cloudinaryData.height,
+                size: cloudinaryData.bytes,
+                mime_type: cloudinaryData.resource_type === 'image' ? `image/${cloudinaryData.format}` : 'application/octet-stream',
+                ...additionalData
+            };
+
+            // Crear el registro en la base de datos
+            return await this.createPhoto(photoData, userId);
+        } catch (error) {
+            console.error('Error al procesar subida de Cloudinary:', error);
+            throw new Error(`Error al procesar imagen: ${error.message}`);
+        }
+    }
+
+    /**
+     * Sube una imagen directamente a Cloudinary y la registra
+     * @param {Buffer|string} fileBuffer - Archivo de imagen o ruta temporal
+     * @param {string} filename - Nombre original del archivo
+     * @param {string} userId - ID del usuario
+     * @param {Object} additionalData - Datos adicionales (place_id, position)
+     * @returns {Promise<Object>} - Foto registrada
+     */
+    async uploadAndRegisterPhoto(fileBuffer, filename, userId, additionalData = {}) {
+        try {
+            // Subir a Cloudinary con optimizaciones aplicadas
+            const uploadResult = await this.cloudinary.uploadImage(fileBuffer, {
+                folder: `nomada/users/${userId}/photos`,
+                public_id: this.sanitizeFilename(filename).split('.')[0]
+            });
+
+            // Registrar en base de datos
+            const photoData = {
+                filename: filename,
+                public_url: uploadResult.secure_url,
+                width: uploadResult.width,
+                height: uploadResult.height,
+                size: uploadResult.bytes,
+                mime_type: `image/${uploadResult.format}`,
+                ...additionalData
+            };
+
+            return await this.createPhoto(photoData, userId);
+        } catch (error) {
+            console.error('Error en subida y registro de foto:', error);
+            throw new Error(`Error al subir y registrar foto: ${error.message}`);
         }
     }
 

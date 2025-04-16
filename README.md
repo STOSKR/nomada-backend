@@ -127,3 +127,89 @@ docs/
 ## Licencia
 
 ISC
+
+# Nomada Backend - Servicio de Fotos con Cloudinary
+
+## Integración con Cloudinary
+
+El backend incluye una integración con Cloudinary para el almacenamiento y optimización de imágenes.
+
+### Características principales:
+
+- **Optimización automática de imágenes**: todas las imágenes subidas se optimizan automáticamente para mejorar el rendimiento.
+- **Múltiples variantes**: se generan automáticamente versiones optimizadas para distintos usos (miniaturas, listados, vista detallada).
+- **Gestión integrada**: las imágenes están vinculadas con rutas y lugares en la base de datos.
+- **Carga directa**: soporte para carga directa desde el frontend usando firmas seguras.
+
+### Configuración
+
+Las claves de Cloudinary están configuradas en el archivo `.env`:
+
+```
+NEXT_PUBLIC_CLOUDINARY_NAME=your_cloud_name
+NEXT_PUBLIC_CLOUDINARY_API_KEY=your_api_key
+NEXT_PUBLIC_CLOUDINARY_API_SECRET=your_api_secret
+NEXT_PUBLIC_CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
+```
+
+### Endpoints disponibles
+
+#### Subida de fotos
+
+- `POST /photos/upload`: Sube una foto directamente al servidor (multipart/form-data)
+- `POST /photos/upload-url`: Obtiene una firma para subir directamente a Cloudinary desde el frontend
+- `POST /photos/process-upload`: Registra una foto ya subida a Cloudinary
+
+#### Gestión de fotos
+
+- `GET /photos`: Obtiene las fotos del usuario (incluye URLs optimizadas)
+- `GET /photos/:id`: Obtiene detalles de una foto específica (incluye variantes)
+- `PUT /photos/:id`: Actualiza metadatos de una foto
+- `DELETE /photos/:id`: Elimina una foto
+
+### Ejemplo de uso (Frontend)
+
+```javascript
+// 1. Obtener datos firmados para subida directa
+const response = await api.post('/photos/upload-url', { filename: 'vacaciones.jpg' });
+const { uploadData } = response.data.upload;
+
+// 2. Subir a Cloudinary directamente desde el cliente
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('api_key', uploadData.apiKey);
+formData.append('timestamp', uploadData.timestamp);
+formData.append('signature', uploadData.signature);
+formData.append('folder', uploadData.folder);
+formData.append('transformation', uploadData.transformation);
+
+const cloudinaryResponse = await fetch(
+  `https://api.cloudinary.com/v1_1/${uploadData.cloudName}/image/upload`,
+  {
+    method: 'POST',
+    body: formData
+  }
+);
+
+const cloudinaryData = await cloudinaryResponse.json();
+
+// 3. Registrar la imagen en la base de datos
+await api.post('/photos/process-upload', {
+  cloudinaryData: cloudinaryData,
+  place_id: 'id_del_lugar', // Opcional
+  position: '40.7128,-74.0060' // Opcional
+});
+```
+
+### Transformaciones disponibles
+
+Todas las imágenes subidas incluyen optimizaciones automáticas:
+
+- **Calidad automática** (`quality: 'auto'`): Cloudinary determina la mejor compresión.
+- **Formato automático** (`fetch_format: 'auto'`): entrega WebP a navegadores que lo soportan.
+- **Redimensionamiento**: limita el ancho máximo a 1920px manteniendo proporción.
+
+### Más información
+
+- [Documentación de Cloudinary](https://cloudinary.com/documentation)
+- [Guía de optimización de imágenes](https://cloudinary.com/documentation/image_optimization)

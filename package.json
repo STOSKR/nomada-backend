@@ -11,16 +11,17 @@
     "create-tables": "node scripts/create-tables.js"
   },
   "dependencies": {
-    "@fastify/cors": "^8.3.0",
+    "@fastify/cors": "^8.5.0",
     "@fastify/jwt": "^7.2.4",
+    "@fastify/multipart": "^8.1.0",
     "@fastify/swagger": "^8.9.0",
     "@fastify/swagger-ui": "^1.9.3",
     "@supabase/supabase-js": "^2.31.0",
+    "cloudinary": "^2.6.0",
     "dotenv": "^16.3.1",
     "fastify": "^4.21.0",
-    "fastify-multipart": "^5.3.1",
     "fastify-plugin": "^4.5.1",
-    "nomada-backend": "file:",
+    "multer": "^1.4.5-lts.2",
     "pg": "^8.14.1"
   },
   "devDependencies": {

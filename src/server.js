@@ -15,7 +15,7 @@ const fastify = require('fastify')({
       }
     }
   },
-  bodyLimit: 1048576,
+  bodyLimit: 100 * 1024 * 1024, // Aumentado a 100MB
   ajv: {
     customOptions: {
       allErrors: true,
@@ -40,9 +40,6 @@ const colors = {
   cyan: '\x1b[36m'
 };
 
-// Verificar que el cliente de Supabase está disponible
-console.log(`${colors.bright}${colors.magenta}⚡ NÓMADA API${colors.reset} - ${colors.cyan}Iniciando servidor...${colors.reset}`);
-console.log(`${colors.yellow}▶ Supabase:${colors.reset} ${supabase ? colors.green + 'Conectado' : colors.red + 'Desconectado'}${colors.reset}`);
 
 // Configuración básica
 const PORT = process.env.PORT || 3000;
@@ -53,7 +50,7 @@ const cors = require('@fastify/cors');
 const jwt = require('@fastify/jwt');
 const swagger = require('@fastify/swagger');
 const swaggerUI = require('@fastify/swagger-ui');
-const multipart = require('fastify-multipart');
+const multipart = require('@fastify/multipart');
 
 // Registro de plugins
 async function registerPlugins() {
@@ -75,12 +72,17 @@ async function registerPlugins() {
   // Multipart para subida de archivos
   await fastify.register(multipart, {
     limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB
-      files: 1
+      fieldNameSize: 100, // Tamaño máximo del nombre del campo
+      fieldSize: 100 * 1024 * 1024, // Tamaño máximo del campo (100MB)
+      fields: 20,          // Número máximo de campos no de archivo
+      fileSize: 100 * 1024 * 1024, // Tamaño máximo del archivo (100MB)
+      files: 5,            // Número máximo de archivos
+      parts: 1000,         // Número máximo de partes (campos + archivos)
+      headerPairs: 2000    // Número máximo de pares de cabecera
     },
     // Solo procesar como multipart las rutas que realmente lo necesitan
     addHook: false,
-    attachFieldsToBody: false
+    attachFieldsToBody: true
   });
 
   // CORS
