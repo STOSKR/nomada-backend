@@ -366,15 +366,33 @@ class PhotoService {
      */
     async uploadAndRegisterPhoto(fileBuffer, filename, userId, additionalData = {}) {
         try {
+            // Verificar si los parámetros son válidos
+            if (!fileBuffer) {
+                throw new Error('El archivo de imagen es requerido');
+            }
+            
+            if (!userId) {
+                throw new Error('El ID de usuario es requerido');
+            }
+
+            // Añadir logs para depuración
+            console.log('Iniciando subida de foto con:');
+            console.log('- Tipo de fileBuffer:', typeof fileBuffer);
+            console.log('- Filename:', filename);
+            console.log('- UserID:', userId);
+            console.log('- Datos adicionales:', JSON.stringify(additionalData));
+
             // Subir a Cloudinary con optimizaciones aplicadas
             const uploadResult = await this.cloudinary.uploadImage(fileBuffer, {
                 folder: `nomada/users/${userId}/photos`,
                 public_id: this.sanitizeFilename(filename).split('.')[0]
             });
 
+            console.log('Imagen subida correctamente a Cloudinary:', uploadResult.secure_url);
+
             // Registrar en base de datos
             const photoData = {
-                filename: filename,
+                filename: filename || `uploaded_${Date.now()}`,
                 public_url: uploadResult.secure_url,
                 width: uploadResult.width,
                 height: uploadResult.height,
@@ -396,6 +414,13 @@ class PhotoService {
      * @returns {string} - Nombre de archivo sanitizado
      */
     sanitizeFilename(filename) {
+        // Verificar si filename es undefined o no es un string
+        if (!filename || typeof filename !== 'string') {
+            console.warn('Nombre de archivo inválido:', filename);
+            // Generar un nombre de archivo predeterminado con timestamp
+            return `file_${Date.now()}.jpg`;
+        }
+
         // Eliminar caracteres no seguros
         let sanitized = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
 

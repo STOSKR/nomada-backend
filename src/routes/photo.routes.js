@@ -259,23 +259,35 @@ async function photoRoutes(fastify, options) {
             const userId = request.user.id;
             const file = request.file;
             
+            // Verificar si tenemos un archivo
             if (!file) {
+                console.log('ERROR: No se ha proporcionado ningún archivo en la solicitud');
                 return reply.code(400).send({
                     success: false,
                     message: 'No se ha proporcionado ningún archivo'
                 });
             }
 
-            // Log para debugging
+            // Log para debugging detallado
+            console.log('-------- DATOS DE LA SOLICITUD DE SUBIDA --------');
             console.log('request.body:', request.body);
             console.log('place_id:', request.body.place_id);
             console.log('position:', request.body.position);
-            console.log('file:', {
-                filename: file.originalname,
+            console.log('FILE INFO:', {
+                fieldname: file.fieldname,
+                originalname: file.originalname,
+                encoding: file.encoding,
                 mimetype: file.mimetype,
                 size: file.size,
-                path: file.path
+                path: file.path,
+                exists: fs.existsSync(file.path)
             });
+            console.log('----------------------------------------------');
+
+            // Verificar que el archivo existe y es accesible
+            if (!fs.existsSync(file.path)) {
+                throw new Error(`El archivo temporal no existe en la ruta: ${file.path}`);
+            }
 
             // Obtener los campos adicionales
             const place_id = request.body.place_id;
@@ -288,7 +300,7 @@ async function photoRoutes(fastify, options) {
             // Subir a Cloudinary y registrar
             const photo = await photoService.uploadAndRegisterPhoto(
                 file.path,
-                file.originalname,
+                file.originalname || `upload_${Date.now()}`,
                 userId,
                 additionalData
             );

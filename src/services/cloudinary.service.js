@@ -25,6 +25,26 @@ class CloudinaryService {
    */
   async uploadImage(file, options = {}) {
     try {
+      // Verificar si el archivo existe si es una ruta
+      if (typeof file === 'string') {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Convertir a ruta absoluta si es necesario
+        const filePath = path.isAbsolute(file) ? file : path.resolve(file);
+        
+        console.log('Verificando archivo para subir a Cloudinary:', filePath);
+        
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`El archivo no existe en la ruta: ${filePath}`);
+        }
+        
+        console.log('Archivo verificado con éxito, tamaño:', 
+          fs.statSync(filePath).size, 'bytes');
+      } else {
+        console.log('Subiendo contenido de buffer a Cloudinary');
+      }
+
       const defaultOptions = {
         folder: 'nomada/photos',
         resource_type: 'image',
@@ -38,8 +58,20 @@ class CloudinaryService {
         ]
       };
       
+      console.log('Configurando opciones de subida a Cloudinary:', {
+        ...defaultOptions,
+        ...options
+      });
+      
       const uploadOptions = { ...defaultOptions, ...options };
       const result = await this.cloudinary.uploader.upload(file, uploadOptions);
+      
+      console.log('Imagen subida exitosamente a Cloudinary:', {
+        public_id: result.public_id,
+        secure_url: result.secure_url,
+        format: result.format,
+        bytes: result.bytes
+      });
       
       return {
         public_id: result.public_id,
