@@ -235,10 +235,24 @@ async function photoRoutes(fastify, options) {
     // Instancia del servicio de fotos
     const photoService = new PhotoService(fastify.supabase);
 
+    // Middleware para imprimir información de depuración antes de la autenticación
+    const debugRequestMiddleware = (request, reply, done) => {
+        console.log('\n----- INFORMACIÓN DE DEPURACIÓN -----');
+        console.log('URI de la solicitud:', request.url);
+        console.log('Método HTTP:', request.method);
+        console.log('Encabezados recibidos:', JSON.stringify(request.headers, null, 2));
+        console.log('Authorization:', request.headers.authorization || 'No proporcionado');
+        console.log('Content-Type:', request.headers['content-type'] || 'No especificado');
+        console.log('Body (parcial):', request.body ? Object.keys(request.body) : 'No disponible');
+        console.log('Query params:', request.query);
+        console.log('----------------------------------\n');
+        done();
+    };
+
     // Subir foto directamente
     fastify.post('/upload', {
         schema: schemas.uploadPhoto,
-        preValidation: [fastify.authenticate],
+        preValidation: [debugRequestMiddleware, fastify.authenticate],
         preHandler: multerHandler('photo')
     }, async (request, reply) => {
         try {
@@ -256,6 +270,12 @@ async function photoRoutes(fastify, options) {
             console.log('request.body:', request.body);
             console.log('place_id:', request.body.place_id);
             console.log('position:', request.body.position);
+            console.log('file:', {
+                filename: file.originalname,
+                mimetype: file.mimetype,
+                size: file.size,
+                path: file.path
+            });
 
             // Obtener los campos adicionales
             const place_id = request.body.place_id;
