@@ -39,6 +39,86 @@ const schemas = {
         }
     },
 
+    // Esquema para subida de avatar en base64 sin autenticación
+    uploadAvatarBase64: {
+        description: 'Subir un avatar en formato base64 sin requerir autenticación',
+        tags: ['fotos', 'avatar'],
+        body: {
+            type: 'object',
+            required: ['image'],
+            properties: {
+                image: { type: 'string' },
+                filename: { type: 'string' }
+            }
+        },
+        response: {
+            200: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' },
+                    id: { type: 'string' },
+                    url: { type: 'string' },
+                    width: { type: 'integer' },
+                    height: { type: 'integer' },
+                    format: { type: 'string' },
+                    size: { type: 'integer' }
+                }
+            }
+        }
+    },
+
+    // Esquema para actualizar avatar en base64
+    updateAvatarBase64: {
+        description: 'Actualizar un avatar existente usando base64 sin requerir autenticación',
+        tags: ['fotos', 'avatar'],
+        body: {
+            type: 'object',
+            required: ['image', 'url'],
+            properties: {
+                image: { type: 'string' },
+                url: { type: 'string', description: 'URL de Cloudinary de la imagen a actualizar' },
+                filename: { type: 'string' }
+            }
+        },
+        response: {
+            200: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' },
+                    url: { type: 'string' },
+                    width: { type: 'integer' },
+                    height: { type: 'integer' },
+                    format: { type: 'string' },
+                    size: { type: 'integer' }
+                }
+            }
+        }
+    },
+
+    // Esquema para eliminar avatar
+    deleteAvatar: {
+        description: 'Eliminar un avatar existente sin requerir autenticación',
+        tags: ['fotos', 'avatar'],
+        body: {
+            type: 'object',
+            required: ['url'],
+            properties: {
+                url: { type: 'string', description: 'URL de Cloudinary de la imagen a eliminar' }
+            }
+        },
+        response: {
+            200: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' }
+                }
+            }
+        }
+    },
+
     // Esquema para subida de foto en base64
     uploadBase64Photo: {
         description: 'Subir una foto en formato base64',
@@ -130,7 +210,7 @@ const schemas = {
                     position: { type: 'string' },
                     caption: { type: 'string' },
                     user_id: { type: 'string' },
-                    variants: { 
+                    variants: {
                         type: 'object',
                         properties: {
                             thumbnail: { type: 'string' },
@@ -220,7 +300,7 @@ async function photoRoutes(fastify, options) {
     if (!fs.existsSync('uploads')) {
         fs.mkdirSync('uploads');
     }
-    
+
     // Instancia del servicio de fotos
     const photoService = new PhotoService(fastify.supabase);
 
@@ -236,14 +316,14 @@ async function photoRoutes(fastify, options) {
     }, async (request, reply) => {
         try {
             const userId = request.user.id;
-            
+
             // Procesar la subida usando @fastify/multipart directamente
             const parts = request.parts();
-            
+
             // Variables para almacenar la imagen y los campos
             let fileBuffer = null;
             let fileInfo = null;
-            
+
             // Procesar cada parte del multipart
             for await (const part of parts) {
                 if (part.type === 'file') {
@@ -254,12 +334,12 @@ async function photoRoutes(fastify, options) {
                         encoding: part.encoding,
                         fieldname: part.fieldname
                     };
-                    
+
                     // Leer el archivo como buffer
                     fileBuffer = await part.toBuffer();
                 }
             }
-            
+
             // Verificar si se recibió un archivo
             if (!fileBuffer || !fileInfo) {
                 return reply.code(400).send({
@@ -267,10 +347,10 @@ async function photoRoutes(fastify, options) {
                     message: 'No se ha proporcionado ningún archivo'
                 });
             }
-            
+
             // Subir directamente a Cloudinary sin guardar en base de datos
             const safeFilename = photoService.sanitizeFilename(fileInfo.filename || `upload_${Date.now()}`);
-            
+
             // Configuración para Cloudinary
             const uploadOptions = {
                 folder: `nomada/users/${userId}/photos`,
@@ -279,10 +359,10 @@ async function photoRoutes(fastify, options) {
                 quality: 'auto',
                 fetch_format: 'auto'
             };
-            
+
             // Subir a Cloudinary directamente
             const uploadResult = await photoService.cloudinary.uploadImage(fileBuffer, uploadOptions);
-            
+
             return {
                 success: true,
                 message: 'Foto subida correctamente',
@@ -294,7 +374,7 @@ async function photoRoutes(fastify, options) {
             };
         } catch (error) {
             request.log.error(error);
-            
+
             return reply.code(400).send({
                 success: false,
                 message: error.message
@@ -310,7 +390,7 @@ async function photoRoutes(fastify, options) {
         try {
             const userId = request.user.id;
             const { image, filename } = request.body;
-            
+
             if (!image) {
                 return reply.code(400).send({
                     success: false,
@@ -322,7 +402,7 @@ async function photoRoutes(fastify, options) {
             let base64Data = image;
             let fileExt = 'jpg';
             let tempFilename = filename || `temp_${Date.now()}.${fileExt}`;
-            
+
             // Si la imagen incluye el prefijo data:image, extraer solo los datos
             if (base64Data.startsWith('data:image')) {
                 const parts = base64Data.split(';base64,');
@@ -331,7 +411,7 @@ async function photoRoutes(fastify, options) {
                     const mimeType = parts[0].replace('data:', '');
                     fileExt = mimeType.split('/')[1] || fileExt;
                     base64Data = parts[1];
-                    
+
                     // Asegurar que el nombre del archivo tiene la extensión correcta
                     if (filename && !filename.endsWith(`.${fileExt}`)) {
                         tempFilename = `${filename}.${fileExt}`;
@@ -343,10 +423,10 @@ async function photoRoutes(fastify, options) {
 
             // Convertir base64 a buffer directamente
             const buffer = Buffer.from(base64Data, 'base64');
-            
+
             // Generar un nombre seguro
             const safeFilename = photoService.sanitizeFilename(tempFilename);
-            
+
             // Configuración para Cloudinary
             const uploadOptions = {
                 folder: `nomada/users/${userId}/photos`,
@@ -355,10 +435,10 @@ async function photoRoutes(fastify, options) {
                 quality: 'auto',
                 fetch_format: 'auto'
             };
-            
+
             // Subir a Cloudinary directamente sin archivos temporales
             const uploadResult = await photoService.cloudinary.uploadImage(buffer, uploadOptions);
-            
+
             return {
                 success: true,
                 message: 'Foto en base64 subida correctamente',
@@ -392,6 +472,261 @@ async function photoRoutes(fastify, options) {
         } catch (error) {
             request.log.error(error);
             return reply.code(500).send({
+                success: false,
+                message: error.message
+            });
+        }
+    });
+
+    // Eliminar avatar (sin autenticación)
+    fastify.delete('/avatar', {
+        schema: schemas.deleteAvatar
+    }, async (request, reply) => {
+        try {
+            const { url } = request.body;
+
+            if (!url) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Se requiere la URL de la imagen a eliminar'
+                });
+            }
+
+            console.log('Intentando eliminar imagen con URL:', url);
+
+            // Extraer el public_id de la URL de Cloudinary
+            // Ejemplo de URL: https://res.cloudinary.com/dqxvjfxdo/image/upload/v1742589999/nomada/avatars/avatar_1742589997818_123.jpg
+            let publicId;
+            try {
+                const regex = /\/v\d+\/(.+)$/;
+                const match = url.match(regex);
+                if (match && match[1]) {
+                    // Quitar la extensión del archivo
+                    publicId = match[1].replace(/\.[^/.]+$/, "");
+                    console.log('Public ID extraído:', publicId);
+                } else {
+                    throw new Error('No se pudo extraer el public_id de la URL');
+                }
+            } catch (error) {
+                console.error('Error al extraer el public_id:', error);
+                return reply.code(400).send({
+                    success: false,
+                    message: 'URL de Cloudinary inválida'
+                });
+            }
+
+            // Eliminar de Cloudinary
+            const result = await photoService.cloudinary.deleteImage(publicId);
+
+            if (result.result !== 'ok') {
+                return reply.code(404).send({
+                    success: false,
+                    message: 'Avatar no encontrado o ya eliminado'
+                });
+            }
+
+            return {
+                success: true,
+                message: 'Avatar eliminado correctamente'
+            };
+        } catch (error) {
+            console.error('Error al eliminar avatar:', error);
+            request.log.error(error);
+
+            return reply.code(400).send({
+                success: false,
+                message: error.message
+            });
+        }
+    });
+
+    // Subir avatar en formato base64 (sin autenticación)
+    fastify.post('/avatar', {
+        schema: schemas.uploadAvatarBase64
+    }, async (request, reply) => {
+        try {
+            console.log('Iniciando procesamiento de avatar en base64');
+            const { image, filename } = request.body;
+
+            if (!image) {
+                console.error('Error: No se ha proporcionado imagen en base64');
+                return reply.code(400).send({
+                    success: false,
+                    message: 'No se ha proporcionado imagen en base64'
+                });
+            }
+
+            // Procesar base64
+            let base64Data = image;
+            let fileExt = 'jpg';
+            let tempFilename = filename || `avatar_${Date.now()}.${fileExt}`;
+
+            console.log('Procesando imagen base64');
+
+            // Si la imagen incluye el prefijo data:image, extraer solo los datos
+            if (base64Data.startsWith('data:image')) {
+                const parts = base64Data.split(';base64,');
+                if (parts.length === 2) {
+                    // Extraer extensión del tipo MIME
+                    const mimeType = parts[0].replace('data:', '');
+                    fileExt = mimeType.split('/')[1] || fileExt;
+                    base64Data = parts[1];
+
+                    // Asegurar que el nombre del archivo tiene la extensión correcta
+                    if (filename && !filename.endsWith(`.${fileExt}`)) {
+                        tempFilename = `${filename}.${fileExt}`;
+                    } else if (!filename) {
+                        tempFilename = `avatar_${Date.now()}.${fileExt}`;
+                    }
+                }
+            }
+
+            // Convertir base64 a buffer directamente
+            const buffer = Buffer.from(base64Data, 'base64');
+            console.log('Buffer creado de base64, tamaño:', buffer.length);
+
+            // Generar ID único para el avatar
+            const avatarId = `avatar_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            console.log('ID generado para el avatar:', avatarId);
+
+            // Configuración específica para avatares
+            const uploadOptions = {
+                folder: 'nomada/avatars',
+                public_id: avatarId,
+                // Optimizaciones para avatar
+                quality: 'auto',
+                fetch_format: 'auto',
+                width: 500, // Tamaño estándar para avatares
+                height: 500,
+                crop: 'fill',
+                gravity: 'face' // Priorizar rostros si los hay
+            };
+
+            console.log('Iniciando subida a Cloudinary con opciones:', uploadOptions);
+
+            // Subir a Cloudinary directamente
+            const uploadResult = await photoService.cloudinary.uploadImage(buffer, uploadOptions);
+            console.log('Resultado de la subida a Cloudinary:', uploadResult);
+
+            return {
+                success: true,
+                message: 'Avatar en base64 subido correctamente',
+                id: avatarId,
+                url: uploadResult.secure_url,
+                width: uploadResult.width,
+                height: uploadResult.height,
+                format: uploadResult.format,
+                size: uploadResult.bytes
+            };
+        } catch (error) {
+            console.error('Error al subir avatar en base64:', error);
+            request.log.error(error);
+
+            return reply.code(400).send({
+                success: false,
+                message: error.message
+            });
+        }
+    });
+
+    // Actualizar avatar en formato base64 (sin autenticación)
+    fastify.put('/avatar', {
+        schema: schemas.updateAvatarBase64
+    }, async (request, reply) => {
+        try {
+            console.log('Iniciando actualización de avatar en base64');
+            const { image, filename, url } = request.body;
+
+            if (!image) {
+                console.error('Error: No se ha proporcionado imagen en base64');
+                return reply.code(400).send({
+                    success: false,
+                    message: 'No se ha proporcionado imagen en base64'
+                });
+            }
+
+            if (!url) {
+                console.error('Error: No se ha proporcionado URL de imagen a actualizar');
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Se requiere la URL de la imagen a actualizar'
+                });
+            }
+
+            // Extraer el public_id de la URL de Cloudinary
+            let publicId;
+            try {
+                const regex = /\/v\d+\/(.+)$/;
+                const match = url.match(regex);
+                if (match && match[1]) {
+                    // Quitar la extensión del archivo
+                    publicId = match[1].replace(/\.[^/.]+$/, "");
+                    console.log('Public ID extraído para actualización:', publicId);
+                } else {
+                    throw new Error('No se pudo extraer el public_id de la URL');
+                }
+            } catch (error) {
+                console.error('Error al extraer el public_id:', error);
+                return reply.code(400).send({
+                    success: false,
+                    message: 'URL de Cloudinary inválida'
+                });
+            }
+
+            // Procesar base64
+            let base64Data = image;
+            let fileExt = 'jpg';
+
+            console.log('Procesando imagen base64 para actualización');
+
+            // Si la imagen incluye el prefijo data:image, extraer solo los datos
+            if (base64Data.startsWith('data:image')) {
+                const parts = base64Data.split(';base64,');
+                if (parts.length === 2) {
+                    // Extraer extensión del tipo MIME
+                    const mimeType = parts[0].replace('data:', '');
+                    fileExt = mimeType.split('/')[1] || fileExt;
+                    base64Data = parts[1];
+                }
+            }
+
+            // Convertir base64 a buffer directamente
+            const buffer = Buffer.from(base64Data, 'base64');
+            console.log('Buffer creado de base64, tamaño:', buffer.length);
+
+            // Configuración específica para avatares
+            const uploadOptions = {
+                public_id: publicId,
+                // Optimizaciones para avatar
+                quality: 'auto',
+                fetch_format: 'auto',
+                width: 500, // Tamaño estándar para avatares
+                height: 500,
+                crop: 'fill',
+                gravity: 'face', // Priorizar rostros si los hay
+                overwrite: true // Para actualizar el existente
+            };
+
+            console.log('Iniciando actualización en Cloudinary con opciones:', uploadOptions);
+
+            // Subir a Cloudinary directamente
+            const uploadResult = await photoService.cloudinary.uploadImage(buffer, uploadOptions);
+            console.log('Resultado de la actualización en Cloudinary:', uploadResult);
+
+            return {
+                success: true,
+                message: 'Avatar en base64 actualizado correctamente',
+                url: uploadResult.secure_url,
+                width: uploadResult.width,
+                height: uploadResult.height,
+                format: uploadResult.format,
+                size: uploadResult.bytes
+            };
+        } catch (error) {
+            console.error('Error al actualizar avatar en base64:', error);
+            request.log.error(error);
+
+            return reply.code(400).send({
                 success: false,
                 message: error.message
             });
