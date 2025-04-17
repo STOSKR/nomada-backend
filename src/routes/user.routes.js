@@ -5,43 +5,6 @@ const { supabase } = require('../db/supabase');
 // Esquemas para validación y documentación
 const schemas = {
 
-  getProfile: {
-    description: 'Obtener perfil del usuario',
-    tags: ['usuarios'],
-    security: [{ apiKey: [] }],
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean' },
-          user: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              nomada_id: { type: 'string' },
-              username: { type: 'string' },
-              email: { type: 'string' },
-              bio: { type: 'string' },
-              avatar_url: { type: 'string', description: 'URL del avatar del usuario' },
-              preferences: {
-                type: 'object',
-                properties: {
-                  favoriteDestinations: { type: 'array', items: { type: 'string' } },
-                  travelStyle: { type: 'string', enum: ['adventure', 'relax', 'culture', 'gastronomy'] },
-                  budget: { type: 'string', enum: ['budget', 'mid-range', 'luxury'] }
-                }
-              },
-              visitedCountries: { type: 'array', items: { type: 'string' } },
-              followersCount: { type: 'number' },
-              followingCount: { type: 'number' },
-              routesCount: { type: 'number' }
-            }
-          }
-        }
-      }
-    }
-  },
-
   updateProfile: {
     description: 'Actualizar perfil del usuario',
     tags: ['usuarios'],
@@ -369,7 +332,7 @@ async function userRoutes(fastify, options) {
   fastify.get('/profile', {
     schema: {
       description: 'Obtener perfil del usuario autenticado',
-      tags: ['usuarios', 'perfil'],
+      tags: ['usuarios'],
       response: {
         200: {
           type: 'object',
