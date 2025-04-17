@@ -74,11 +74,11 @@ const schemas = {
         tags: ['fotos', 'avatar'],
         body: {
             type: 'object',
-            required: ['image', 'url'],
+            required: ['image', 'user_id'],
             properties: {
                 image: { type: 'string' },
-                url: { type: 'string', description: 'URL de Cloudinary de la imagen a actualizar' },
-                filename: { type: 'string' }
+                filename: { type: 'string' },
+                user_id: { type: 'string', description: 'ID del usuario cuyo avatar se está actualizando' }
             }
         },
         response: {
@@ -589,17 +589,19 @@ async function photoRoutes(fastify, options) {
             const avatarId = `avatar_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
             console.log('ID generado para el avatar:', avatarId);
 
-            // Configuración específica para avatares
+            // Configuración específica para avatares con optimizaciones mejoradas
             const uploadOptions = {
                 folder: 'nomada/avatars',
                 public_id: avatarId,
-                // Optimizaciones para avatar
-                quality: 'auto',
+                // Optimizaciones avanzadas para avatar
+                quality: 'auto:best', // Mejor calidad automática
                 fetch_format: 'auto',
                 width: 500, // Tamaño estándar para avatares
                 height: 500,
                 crop: 'fill',
-                gravity: 'face' // Priorizar rostros si los hay
+                gravity: 'face', // Priorizar rostros si los hay
+                radius: 'max', // Hacer redondo el avatar (opcional)
+                dpr: 'auto' // Optimización para diferentes densidades de píxeles
             };
 
             console.log('Iniciando subida a Cloudinary con opciones:', uploadOptions);
@@ -610,7 +612,7 @@ async function photoRoutes(fastify, options) {
 
             return {
                 success: true,
-                message: 'Avatar en base64 subido correctamente',
+                message: 'Avatar subido correctamente',
                 id: avatarId,
                 url: uploadResult.secure_url,
                 width: uploadResult.width,
@@ -635,7 +637,7 @@ async function photoRoutes(fastify, options) {
     }, async (request, reply) => {
         try {
             console.log('Iniciando actualización de avatar en base64');
-            const { image, filename, url } = request.body;
+            const { image, user_id } = request.body;
 
             if (!image) {
                 console.error('Error: No se ha proporcionado imagen en base64');
@@ -645,31 +647,11 @@ async function photoRoutes(fastify, options) {
                 });
             }
 
-            if (!url) {
-                console.error('Error: No se ha proporcionado URL de imagen a actualizar');
+            if (!user_id) {
+                console.error('Error: No se ha proporcionado el ID del usuario');
                 return reply.code(400).send({
                     success: false,
-                    message: 'Se requiere la URL de la imagen a actualizar'
-                });
-            }
-
-            // Extraer el public_id de la URL de Cloudinary
-            let publicId;
-            try {
-                const regex = /\/v\d+\/(.+)$/;
-                const match = url.match(regex);
-                if (match && match[1]) {
-                    // Quitar la extensión del archivo
-                    publicId = match[1].replace(/\.[^/.]+$/, "");
-                    console.log('Public ID extraído para actualización:', publicId);
-                } else {
-                    throw new Error('No se pudo extraer el public_id de la URL');
-                }
-            } catch (error) {
-                console.error('Error al extraer el public_id:', error);
-                return reply.code(400).send({
-                    success: false,
-                    message: 'URL de Cloudinary inválida'
+                    message: 'Se requiere el ID del usuario para actualizar su avatar'
                 });
             }
 
@@ -694,28 +676,53 @@ async function photoRoutes(fastify, options) {
             const buffer = Buffer.from(base64Data, 'base64');
             console.log('Buffer creado de base64, tamaño:', buffer.length);
 
-            // Configuración específica para avatares
+            // Generar ID único para el avatar
+            const avatarId = `avatar_${user_id}_${Date.now()}`;
+            console.log('ID generado para el avatar:', avatarId);
+
+            // Configuración específica para avatares con optimizaciones mejoradas
             const uploadOptions = {
-                public_id: publicId,
-                // Optimizaciones para avatar
-                quality: 'auto',
+                folder: 'nomada/avatars',
+                public_id: avatarId,
+                // Optimizaciones avanzadas para avatar
+                quality: 'auto:best', // Mejor calidad automática
                 fetch_format: 'auto',
                 width: 500, // Tamaño estándar para avatares
                 height: 500,
                 crop: 'fill',
                 gravity: 'face', // Priorizar rostros si los hay
-                overwrite: true // Para actualizar el existente
+                radius: 'max', // Hacer redondo el avatar (opcional)
+                dpr: 'auto' // Optimización para diferentes densidades de píxeles
             };
 
-            console.log('Iniciando actualización en Cloudinary con opciones:', uploadOptions);
+            console.log('Iniciando subida a Cloudinary con opciones:', uploadOptions);
 
             // Subir a Cloudinary directamente
             const uploadResult = await photoService.cloudinary.uploadImage(buffer, uploadOptions);
-            console.log('Resultado de la actualización en Cloudinary:', uploadResult);
+            console.log('Resultado de la subida a Cloudinary:', uploadResult);
+
+            // Actualizar el avatar_url en la tabla de usuarios
+            try {
+                const { error } = await fastify.supabase
+                    .from('users')
+                    .update({ avatar_url: uploadResult.secure_url })
+                    .eq('id', user_id);
+
+                if (error) {
+                    console.error('Error al actualizar avatar_url en la base de datos:', error);
+                    throw new Error(`Error al actualizar el avatar del usuario: ${error.message}`);
+                }
+
+                console.log(`Avatar actualizado para el usuario ${user_id}`);
+            } catch (dbError) {
+                console.error('Error de base de datos al actualizar avatar_url:', dbError);
+                // No fallamos la operación completa, ya que la imagen se actualizó correctamente
+                // Solo registramos el error
+            }
 
             return {
                 success: true,
-                message: 'Avatar en base64 actualizado correctamente',
+                message: 'Avatar actualizado correctamente',
                 url: uploadResult.secure_url,
                 width: uploadResult.width,
                 height: uploadResult.height,
