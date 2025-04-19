@@ -8,8 +8,6 @@ const path = require('path');
 
 // Función para crear y configurar instancia de Fastify
 const createApp = () => {
-  console.log('Iniciando creación de aplicación...');
-  console.log('Directorio actual:', __dirname);
 
   const fastify = require('fastify')({
     logger: {
@@ -28,7 +26,6 @@ const createApp = () => {
 
   // Importar plugins y componentes propios con rutas absolutas
   const { supabasePlugin, supabase } = require(path.join(__dirname, 'db/supabase'));
-  console.log('Supabase plugin cargado correctamente');
 
   // Colores para la consola
   const colors = {
@@ -44,11 +41,9 @@ const createApp = () => {
   // Registrar plugins de forma sincrónica para entorno serverless
   const registerPlugins = async () => {
     try {
-      console.log('Iniciando registro de plugins...');
 
       // Conexión a Supabase
       await fastify.register(supabasePlugin);
-      console.log('Plugin de Supabase registrado correctamente');
 
       // Configuración explícita para el parser JSON
       fastify.addContentTypeParser('application/json', { parseAs: 'string' }, function (req, body, done) {
@@ -61,7 +56,6 @@ const createApp = () => {
           done(err, undefined);
         }
       });
-      console.log('Parser JSON configurado correctamente');
 
       // Multipart para subida de archivos
       await fastify.register(require('@fastify/multipart'), {
@@ -78,7 +72,6 @@ const createApp = () => {
         addHook: false,
         attachFieldsToBody: true
       });
-      console.log('Plugin multipart registrado correctamente');
 
       // Configuración de CORS para permitir peticiones desde cualquier origen
       await fastify.register(require('@fastify/cors'), {
@@ -89,7 +82,6 @@ const createApp = () => {
         preflightContinue: false,
         optionsSuccessStatus: 204
       });
-      console.log('Plugin CORS registrado correctamente');
 
       // JWT para autenticación
       await fastify.register(require('@fastify/jwt'), {
@@ -98,7 +90,6 @@ const createApp = () => {
           expiresIn: '24h'
         }
       });
-      console.log('Plugin JWT registrado correctamente');
 
       // Decorador para verificar autenticación en rutas protegidas
       fastify.decorate('authenticate', async function (request, reply) {
@@ -133,10 +124,6 @@ const createApp = () => {
 
       // Añadir una ruta de prueba directa para login
       fastify.post('/test-login', async (request, reply) => {
-        console.log('Recibida petición a /test-login');
-        console.log('Headers:', request.headers);
-        console.log('Body:', request.body);
-
         try {
           const { email, password } = request.body || {};
 
@@ -153,7 +140,6 @@ const createApp = () => {
             received: { email }
           };
         } catch (error) {
-          console.error('Error en test-login:', error);
           return reply.code(500).send({
             success: false,
             message: 'Error interno en ruta de prueba',
@@ -164,7 +150,6 @@ const createApp = () => {
 
       // Añadir ruta raíz
       fastify.get('/', async (request, reply) => {
-        console.log('Recibida petición a la ruta raíz (/)');
         return {
           success: true,
           message: 'API Nómada funcionando correctamente',
@@ -202,7 +187,6 @@ const createApp = () => {
           // Continuar sin autenticación en caso de cualquier error
         }
       });
-      console.log('Decoradores de autenticación registrados correctamente');
 
       // Swagger para documentación
       await fastify.register(require('@fastify/swagger'), {
@@ -233,7 +217,6 @@ const createApp = () => {
         hideUntagged: true,
         exposeRoute: true
       });
-      console.log('Plugin Swagger registrado correctamente');
 
       // UI de Swagger
       await fastify.register(require('@fastify/swagger-ui'), {
@@ -249,10 +232,8 @@ const createApp = () => {
         staticCSP: true,
         transformStaticCSP: (header) => header
       });
-      console.log('Plugin Swagger UI registrado correctamente');
 
       // Registro de rutas de forma dinámica para evitar problemas con las rutas relativas
-      console.log('Registrando rutas...');
 
       // Registrar todas las rutas antes de que el plugin raíz se inicialice
       const routes = [
@@ -295,16 +276,12 @@ const createApp = () => {
         try {
           const routeModule = require(path.join(__dirname, route.module));
           await fastify.register(routeModule, { prefix: route.prefix });
-          console.log(`Rutas de ${route.module} registradas correctamente`);
         } catch (error) {
-          console.error(`Error al cargar rutas de ${route.module}:`, error);
+          // Error al cargar ruta
         }
       }
 
-      console.log('Todas las rutas registradas correctamente');
-
     } catch (err) {
-      console.error('Error al registrar plugins:', err);
       throw err;
     }
   };
@@ -342,16 +319,16 @@ const createApp = () => {
 
   // Manejador de proceso para errores no capturados
   process.on('uncaughtException', (error) => {
-    console.error('Error no capturado:', error);
+    // Error no capturado
   });
 
   process.on('unhandledRejection', (reason, promise) => {
-    console.error('Promesa rechazada no manejada:', reason);
+    // Promesa rechazada no manejada
   });
 
   // Inicializar plugins y rutas
   registerPlugins().catch(err => {
-    console.error('Error al registrar plugins:', err);
+    // Error al registrar plugins
   });
 
   return fastify;
@@ -365,11 +342,12 @@ if (process.env.NODE_ENV !== 'production') {
 
   fastify.listen({ port: PORT, host: HOST }, (err) => {
     if (err) {
-      console.error('Error al iniciar el servidor:', err);
       fastify.log.error('Error al iniciar el servidor:', err);
       process.exit(1);
     }
-    console.log(`Servidor iniciado en http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+    const host = HOST === '0.0.0.0' ? 'localhost' : HOST;
+    console.log(`Servidor iniciado en http://${host}:${PORT}`);
+    console.log(`Documentación disponible en http://${host}:${PORT}/documentacion`);
   });
 }
 
@@ -380,15 +358,12 @@ let cachedApp;
 module.exports = async (req, res) => {
   try {
     if (!cachedApp) {
-      console.log('Inicializando instancia de Fastify para entorno serverless');
       cachedApp = createApp();
       await cachedApp.ready();
-      console.log('Instancia de Fastify inicializada para entorno serverless');
     }
 
     cachedApp.server.emit('request', req, res);
   } catch (err) {
-    console.error('Error en handler serverless:', err);
     res.statusCode = 500;
     res.end(JSON.stringify({
       success: false,
