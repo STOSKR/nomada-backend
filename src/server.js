@@ -334,22 +334,28 @@ const createApp = () => {
   return fastify;
 };
 
-// Iniciar servidor si no estamos en entorno de producción
-if (process.env.NODE_ENV !== 'production') {
+// Inicializar servidor
+const startServer = async () => {
   const PORT = process.env.PORT || 3000;
   const HOST = process.env.HOST || '0.0.0.0';
   const fastify = createApp();
 
-  fastify.listen({ port: PORT, host: HOST }, (err) => {
-    if (err) {
-      fastify.log.error('Error al iniciar el servidor:', err);
-      process.exit(1);
-    }
+  try {
+    await fastify.ready();
+    await fastify.listen({ port: PORT, host: HOST });
+
     const host = HOST === '0.0.0.0' ? 'localhost' : HOST;
     console.log(`Servidor iniciado en http://${host}:${PORT}`);
     console.log(`Documentación disponible en http://${host}:${PORT}/documentacion`);
-  });
-}
+  } catch (err) {
+    fastify.log.error('Error al iniciar el servidor:', err);
+    process.exit(1);
+  }
+};
+
+// Iniciar el servidor independientemente del entorno
+// Esto asegura que la aplicación arranque en Render
+startServer();
 
 // Para entorno serverless
 let cachedApp;
