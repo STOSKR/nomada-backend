@@ -4,7 +4,7 @@
  * Ruta de prueba para verificar que la API está funcionando
  */
 async function routes(fastify, options) {
-    fastify.get('/api/test', {
+    fastify.get('/api/health', {
         schema: {
             description: 'Ruta de prueba para verificar el estado de la API',
             tags: ['Testing'],

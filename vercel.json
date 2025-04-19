@@ -2,17 +2,20 @@
     "version": 2,
     "builds": [
         {
-            "src": "src/serverless.js",
+            "src": "src/server.js",
             "use": "@vercel/node"
         }
     ],
     "routes": [
         {
             "src": "/(.*)",
-            "dest": "src/serverless.js"
+            "dest": "src/server.js"
         }
     ],
     "env": {
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "PORT": "3000",
+        "HOST": "0.0.0.0",
+        "VERCEL": "1"
     }
 }
