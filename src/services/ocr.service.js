@@ -16,12 +16,19 @@ class OCRService {
      */
     constructor(supabase) {
         this.supabase = supabase;
-        this.tempDir = path.join(__dirname, '../../temp');
 
-        // Crear directorio temporal si no existe
-        if (!fs.existsSync(this.tempDir)) {
+        // Usar el directorio /tmp para entornos serverless (Vercel, AWS Lambda, etc)
+        // En desarrollo local, usar un directorio temporal dentro del proyecto
+        this.tempDir = process.env.NODE_ENV === 'production'
+            ? '/tmp'
+            : path.join(__dirname, '../../temp');
+
+        // Crear directorio temporal si no existe y no estamos en producción
+        if (process.env.NODE_ENV !== 'production' && !fs.existsSync(this.tempDir)) {
             fs.mkdirSync(this.tempDir, { recursive: true });
         }
+
+        console.log(`OCRService: Usando directorio temporal ${this.tempDir}`);
     }
 
     /**
