@@ -194,9 +194,15 @@ async function ocrRoutes(fastify, options) {
     // Instancia del servicio OCR
     const ocrService = new OCRService(fastify.supabase);
 
-    // Crear carpeta temporal si no existe
-    const tempDir = path.join(__dirname, '../../temp');
-    if (!fs.existsSync(tempDir)) {
+    // Determinar directorio temporal según entorno
+    const tempDir = process.env.NODE_ENV === 'production'
+        ? '/tmp'
+        : path.join(__dirname, '../../temp');
+
+    console.log(`ocr.routes: Usando directorio temporal ${tempDir}`);
+
+    // Crear carpeta temporal si no existe y no estamos en producción
+    if (process.env.NODE_ENV !== 'production' && !fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
     }
 
