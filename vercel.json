@@ -8,6 +8,38 @@
     ],
     "routes": [
         {
+            "src": "/api/(.*)",
+            "dest": "src/server.js"
+        },
+        {
+            "src": "/auth/(.*)",
+            "dest": "src/server.js"
+        },
+        {
+            "src": "/users/(.*)",
+            "dest": "src/server.js"
+        },
+        {
+            "src": "/routes/(.*)",
+            "dest": "src/server.js"
+        },
+        {
+            "src": "/places/(.*)",
+            "dest": "src/server.js"
+        },
+        {
+            "src": "/photos/(.*)",
+            "dest": "src/server.js"
+        },
+        {
+            "src": "/recommendations/(.*)",
+            "dest": "src/server.js"
+        },
+        {
+            "src": "/ocr/(.*)",
+            "dest": "src/server.js"
+        },
+        {
             "src": "/(.*)",
             "dest": "src/server.js"
         }

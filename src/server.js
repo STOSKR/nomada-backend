@@ -127,6 +127,37 @@ const createApp = () => {
         }
       });
 
+      // Añadir una ruta de prueba directa para login
+      fastify.post('/test-login', async (request, reply) => {
+        console.log('Recibida petición a /test-login');
+        console.log('Headers:', request.headers);
+        console.log('Body:', request.body);
+
+        try {
+          const { email, password } = request.body || {};
+
+          if (!email || !password) {
+            return reply.code(400).send({
+              success: false,
+              message: 'Correo electrónico y contraseña son requeridos'
+            });
+          }
+
+          return {
+            success: true,
+            message: 'Ruta de prueba funcionando correctamente',
+            received: { email }
+          };
+        } catch (error) {
+          console.error('Error en test-login:', error);
+          return reply.code(500).send({
+            success: false,
+            message: 'Error interno en ruta de prueba',
+            error: error.message
+          });
+        }
+      });
+
       // Middleware para autenticación opcional (permite acceso sin autenticación)
       fastify.decorate('authenticateOptional', async function (request, reply) {
         try {
