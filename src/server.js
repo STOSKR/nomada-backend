@@ -80,6 +80,17 @@ const createApp = () => {
       });
       console.log('Plugin multipart registrado correctamente');
 
+      // Configuración de CORS para permitir peticiones desde cualquier origen
+      await fastify.register(require('@fastify/cors'), {
+        origin: true, // Permitir todos los orígenes en desarrollo
+        methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+        credentials: true,
+        preflightContinue: false,
+        optionsSuccessStatus: 204
+      });
+      console.log('Plugin CORS registrado correctamente');
+
       // JWT para autenticación
       await fastify.register(require('@fastify/jwt'), {
         secret: process.env.JWT_SECRET || 'un_secreto_muy_seguro',
