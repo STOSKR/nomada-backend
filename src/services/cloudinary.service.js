@@ -10,9 +10,9 @@ class CloudinaryService {
    */
   constructor() {
     cloudinary.config({
-      cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_NAME,
-      api_key: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
-      api_secret: process.env.NEXT_PUBLIC_CLOUDINARY_API_SECRET
+      cloud_name: process.env.CLOUDINARY_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET
     });
     this.cloudinary = cloudinary;
   }
@@ -28,19 +28,19 @@ class CloudinaryService {
       // Verificar tipo de entrada
       const isBuffer = Buffer.isBuffer(file);
       const isString = typeof file === 'string';
-      
+
       if (!file || (!isBuffer && !isString)) {
         throw new Error('El archivo debe ser un buffer o una ruta válida');
       }
-      
+
       // Si es una ruta, verificar que el archivo existe
       if (isString) {
         const fs = require('fs');
         const path = require('path');
-        
+
         // Convertir a ruta absoluta si es necesario
         const filePath = path.isAbsolute(file) ? file : path.resolve(file);
-        
+
         if (!fs.existsSync(filePath)) {
           throw new Error(`El archivo no existe en la ruta: ${filePath}`);
         }
@@ -58,9 +58,9 @@ class CloudinaryService {
           { width: 1920, crop: 'limit' } // Limitar ancho máximo manteniendo proporción
         ]
       };
-      
+
       const uploadOptions = { ...defaultOptions, ...options };
-      
+
       // Usar stream_upload si es un buffer para mayor eficiencia
       let result;
       if (isBuffer) {
@@ -68,7 +68,7 @@ class CloudinaryService {
           const stream = require('stream');
           const bufferStream = new stream.PassThrough();
           bufferStream.end(file);
-          
+
           const uploadStream = this.cloudinary.uploader.upload_stream(
             uploadOptions,
             (error, result) => {
@@ -78,14 +78,14 @@ class CloudinaryService {
               resolve(result);
             }
           );
-          
+
           bufferStream.pipe(uploadStream);
         });
       } else {
         // Subida normal para ruta de archivo
         result = await this.cloudinary.uploader.upload(file, uploadOptions);
       }
-      
+
       return {
         public_id: result.public_id,
         version: result.version,
@@ -124,7 +124,7 @@ class CloudinaryService {
   generateUploadSignature(options = {}) {
     try {
       const timestamp = Math.round(new Date().getTime() / 1000);
-      
+
       const defaultOptions = {
         folder: 'nomada/photos',
         timestamp,
@@ -132,15 +132,15 @@ class CloudinaryService {
         transformation: 'q_auto,f_auto,w_1920,c_limit',
         eager: 'q_auto,f_auto,w_1920,c_limit'
       };
-      
+
       const params = { ...defaultOptions, ...options };
-      const signature = this.cloudinary.utils.api_sign_request(params, process.env.NEXT_PUBLIC_CLOUDINARY_API_SECRET);
-      
+      const signature = this.cloudinary.utils.api_sign_request(params, process.env.CLOUDINARY_API_SECRET);
+
       return {
         signature,
         timestamp,
-        cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_NAME,
-        apiKey: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
+        cloudName: process.env.CLOUDINARY_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY,
         folder: params.folder,
         transformation: params.transformation,
         eager: params.eager
@@ -162,15 +162,15 @@ class CloudinaryService {
       if (!url || !url.includes('cloudinary.com')) {
         throw new Error('URL no válida de Cloudinary');
       }
-      
+
       // Extraer el public_id
       const regex = /\/v\d+\/(.+?)(?:\.\w+)?$/;
       const match = url.match(regex);
-      
+
       if (match && match[1]) {
         return match[1];
       }
-      
+
       throw new Error('No se pudo extraer el public_id de la URL');
     } catch (error) {
       console.error('Error al extraer public_id:', error);
@@ -217,7 +217,7 @@ class CloudinaryService {
           fetch_format: 'auto',
           quality: 'auto'
         }),
-        
+
         // Versión para listados
         medium: this.cloudinary.url(publicId, {
           width: 600,
@@ -225,7 +225,7 @@ class CloudinaryService {
           fetch_format: 'auto',
           quality: 'auto'
         }),
-        
+
         // Versión para vista detallada
         large: this.cloudinary.url(publicId, {
           width: 1200,
@@ -233,7 +233,7 @@ class CloudinaryService {
           fetch_format: 'auto',
           quality: 'auto'
         }),
-        
+
         // URL original con optimizaciones básicas
         original: this.cloudinary.url(publicId, {
           fetch_format: 'auto',

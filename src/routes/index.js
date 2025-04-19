@@ -4,6 +4,7 @@ const routeRoutes = require('./route.routes');
 const placeRoutes = require('./place.routes');
 const photoRoutes = require('./photo.routes');
 const recommendationRoutes = require('./recommendation.routes');
+const ocrRoutes = require('./ocr.routes');
 
 /**
  * Registro de todas las rutas de la API
@@ -29,6 +30,9 @@ async function routes(fastify, options) {
 
   // Rutas para recomendaciones
   fastify.register(recommendationRoutes, { prefix: '/recommendations' });
+
+  // Rutas para OCR y procesamiento de imágenes
+  fastify.register(ocrRoutes, { prefix: '/ocr' });
 }
 
 module.exports = routes; 

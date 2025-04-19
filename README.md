@@ -146,10 +146,10 @@ El backend incluye una integración con Cloudinary para el almacenamiento y opti
 Las claves de Cloudinary están configuradas en el archivo `.env`:
 
 ```
-NEXT_PUBLIC_CLOUDINARY_NAME=your_cloud_name
-NEXT_PUBLIC_CLOUDINARY_API_KEY=your_api_key
-NEXT_PUBLIC_CLOUDINARY_API_SECRET=your_api_secret
-NEXT_PUBLIC_CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
+_CLOUDINARY_NAME=your_cloud_name
+_CLOUDINARY_API_KEY=your_api_key
+_CLOUDINARY_API_SECRET=your_api_secret
+_CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
 ```
 
 ### Endpoints disponibles
