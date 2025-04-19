@@ -158,6 +158,17 @@ const createApp = () => {
         }
       });
 
+      // Añadir ruta raíz
+      fastify.get('/', async (request, reply) => {
+        console.log('Recibida petición a la ruta raíz (/)');
+        return {
+          success: true,
+          message: 'API Nómada funcionando correctamente',
+          version: '1.0.0',
+          serverTime: new Date().toISOString()
+        };
+      });
+
       // Middleware para autenticación opcional (permite acceso sin autenticación)
       fastify.decorate('authenticateOptional', async function (request, reply) {
         try {
