@@ -82,10 +82,14 @@ const createApp = () => {
 
       // CORS
       await fastify.register(require('@fastify/cors'), {
-        origin: process.env.CORS_ORIGIN || '*',
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+        origin: true, // Permitir todos los orígenes
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        credentials: true,
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+        exposedHeaders: ['Content-Range', 'X-Total-Count'],
+        maxAge: 86400 // 24 horas
       });
-      console.log('Plugin CORS registrado correctamente');
+      console.log('Plugin CORS registrado correctamente con configuración ampliada');
 
       // JWT para autenticación
       await fastify.register(require('@fastify/jwt'), {
@@ -167,6 +171,67 @@ const createApp = () => {
           version: '1.0.0',
           serverTime: new Date().toISOString()
         };
+      });
+
+      // Ruta para obtener todas las rutas públicas (sin autenticación)
+      fastify.get('/routes/all', async (request, reply) => {
+        try {
+          console.log('Recibida petición a /routes/all');
+          const { limit = 20, offset = 0 } = request.query;
+
+          // Obtener todas las rutas públicas de Supabase
+          const { data, error } = await fastify.supabase
+            .from('routes')
+            .select(`
+              id, 
+              title, 
+              description,
+              is_public,
+              cover_image,
+              created_at,
+              likes_count,
+              saved_count,
+              comments_count,
+              user_id,
+              users:user_id (
+                id, 
+                username, 
+                full_name,
+                avatar_url
+              )
+            `)
+            .eq('is_public', true)
+            .order('created_at', { ascending: false })
+            .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+
+          if (error) {
+            console.error('Error al obtener rutas:', error);
+            return reply.code(500).send({
+              success: false,
+              message: 'Error al obtener rutas',
+              error: error.message
+            });
+          }
+
+          // Transformar los datos para que coincidan con el formato esperado
+          const routes = data.map(route => ({
+            ...route,
+            user: route.users,
+            photos: [] // Inicialmente sin fotos
+          }));
+
+          // Eliminar el campo 'users' redundante
+          routes.forEach(route => delete route.users);
+
+          return routes;
+        } catch (error) {
+          console.error('Error en ruta /routes/all:', error);
+          return reply.code(500).send({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+          });
+        }
       });
 
       // Middleware para autenticación opcional (permite acceso sin autenticación)
