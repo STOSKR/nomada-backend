@@ -355,10 +355,17 @@ const startServer = async () => {
 
 // Iniciar el servidor independientemente del entorno
 // Esto asegura que la aplicación arranque en Render
-startServer();
+if (process.env.VERCEL !== '1') {
+  startServer();
+}
 
 // Para entorno serverless
 let cachedApp;
+
+// Exportar para entorno serverless
+module.exports = {
+  createApp
+};
 
 // Exportar para Vercel
 module.exports = async (req, res) => {
