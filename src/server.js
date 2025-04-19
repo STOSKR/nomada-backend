@@ -6,14 +6,7 @@ require('dotenv').config();
 // Importar dependencias
 const fastify = require('fastify')({
   logger: {
-    level: 'info',
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
-      }
-    }
+    level: 'info'
   },
   bodyLimit: 100 * 1024 * 1024, // Aumentado a 100MB
   ajv: {

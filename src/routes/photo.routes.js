@@ -8,6 +8,7 @@ const util = require('util');
 const unlinkFile = util.promisify(fs.unlink);
 const writeFile = util.promisify(fs.writeFile);
 const path = require('path');
+const { isVercelProd } = require('../app');
 
 /**
  * Esquemas para validación y documentación
@@ -300,7 +301,7 @@ const schemas = {
  */
 async function photoRoutes(fastify, options) {
     // Crear carpeta de uploads si no existe
-    if (!fs.existsSync('uploads')) {
+    if (!isVercelProd && !fs.existsSync('uploads')) {
         fs.mkdirSync('uploads');
     }
 

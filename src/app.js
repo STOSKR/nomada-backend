@@ -2,28 +2,41 @@
 const fastify = require('fastify');
 const cors = require('@fastify/cors');
 
-// Configurar directorio de uploads para multer (subida de archivos)
-const fs = require('fs');
+// Implementación para entornos serverless (como Vercel)
+const isVercelProd = process.env.VERCEL === '1';
+
+// Setup para multer y manejo de archivos
 const path = require('path');
 const multer = require('multer');
 
-// Configurar directorio de uploads para multer
-const uploadsDir = path.join(__dirname, '../uploads');
+// Configuración de almacenamiento para diferentes entornos
+let storage;
+let uploadsDir;
 
-// Asegurar que el directorio de uploads existe
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+// En entorno Vercel usamos almacenamiento en memoria
+if (isVercelProd) {
+  // En Vercel, usar almacenamiento en memoria
+  storage = multer.memoryStorage();
+  uploadsDir = '/tmp'; // directorio temporal, pero no lo usaremos realmente
+} else {
+  // En desarrollo local, usar almacenamiento en disco
+  const fs = require('fs');
+  uploadsDir = path.join(__dirname, '../uploads');
 
-// Configurar almacenamiento para multer
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
+  // Asegurar que el directorio de uploads existe
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
   }
-});
+
+  storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, uploadsDir);
+    },
+    filename: function (req, file, cb) {
+      cb(null, Date.now() + '-' + file.originalname);
+    }
+  });
+}
 
 // Crear instancia de multer
 const upload = multer({ storage: storage });
@@ -34,17 +47,17 @@ const multerHandler = (fieldName) => (request, reply, done) => {
     if (err) {
       return done(err);
     }
-    
+
     // Transferir archivos y campos a request
     if (request.raw.file) {
       request.file = request.raw.file;
     }
-    
+
     // Asegurarse de que request.body incluye todos los campos
     if (request.raw.body) {
       Object.assign(request.body, request.raw.body);
     }
-    
+
     done();
   });
 };
@@ -96,5 +109,6 @@ app.register(require('@fastify/multipart'), {
 module.exports = {
   upload,
   multerHandler,
-  uploadsDir
+  uploadsDir,
+  isVercelProd
 }; 
