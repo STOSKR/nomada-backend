@@ -5,6 +5,7 @@ const placeRoutes = require('./place.routes');
 const photoRoutes = require('./photo.routes');
 const recommendationRoutes = require('./recommendation.routes');
 const ocrRoutes = require('./ocr.routes');
+const testRoutes = require('./api/test');
 
 /**
  * Registro de todas las rutas de la API
@@ -12,6 +13,9 @@ const ocrRoutes = require('./ocr.routes');
  * @param {Object} options - Opciones
  */
 async function routes(fastify, options) {
+
+  // Ruta de prueba para verificar estado
+  fastify.register(testRoutes);
 
   // Rutas de autenticación
   fastify.register(authRoutes, { prefix: '/auth' });
