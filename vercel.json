@@ -6,42 +6,42 @@
             "use": "@vercel/node"
         }
     ],
-    "routes": [
+    "rewrites": [
         {
-            "src": "/api/(.*)",
-            "dest": "src/server.js"
+            "source": "/api/(.*)",
+            "destination": "src/server.js"
         },
         {
-            "src": "/auth/(.*)",
-            "dest": "src/server.js"
+            "source": "/auth/(.*)",
+            "destination": "src/server.js"
         },
         {
-            "src": "/users/(.*)",
-            "dest": "src/server.js"
+            "source": "/users/(.*)",
+            "destination": "src/server.js"
         },
         {
-            "src": "/routes/(.*)",
-            "dest": "src/server.js"
+            "source": "/routes/(.*)",
+            "destination": "src/server.js"
         },
         {
-            "src": "/places/(.*)",
-            "dest": "src/server.js"
+            "source": "/places/(.*)",
+            "destination": "src/server.js"
         },
         {
-            "src": "/photos/(.*)",
-            "dest": "src/server.js"
+            "source": "/photos/(.*)",
+            "destination": "src/server.js"
         },
         {
-            "src": "/recommendations/(.*)",
-            "dest": "src/server.js"
+            "source": "/recommendations/(.*)",
+            "destination": "src/server.js"
         },
         {
-            "src": "/ocr/(.*)",
-            "dest": "src/server.js"
+            "source": "/ocr/(.*)",
+            "destination": "src/server.js"
         },
         {
-            "src": "/(.*)",
-            "dest": "src/server.js"
+            "source": "/(.*)",
+            "destination": "src/server.js"
         }
     ],
     "env": {
