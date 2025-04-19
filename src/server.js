@@ -80,17 +80,6 @@ const createApp = () => {
       });
       console.log('Plugin multipart registrado correctamente');
 
-      // CORS
-      await fastify.register(require('@fastify/cors'), {
-        origin: true, // Permitir todos los orígenes
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        credentials: true,
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-        exposedHeaders: ['Content-Range', 'X-Total-Count'],
-        maxAge: 86400 // 24 horas
-      });
-      console.log('Plugin CORS registrado correctamente con configuración ampliada');
-
       // JWT para autenticación
       await fastify.register(require('@fastify/jwt'), {
         secret: process.env.JWT_SECRET || 'un_secreto_muy_seguro',
@@ -171,67 +160,6 @@ const createApp = () => {
           version: '1.0.0',
           serverTime: new Date().toISOString()
         };
-      });
-
-      // Ruta para obtener todas las rutas públicas (sin autenticación)
-      fastify.get('/routes/all', async (request, reply) => {
-        try {
-          console.log('Recibida petición a /routes/all');
-          const { limit = 20, offset = 0 } = request.query;
-
-          // Obtener todas las rutas públicas de Supabase
-          const { data, error } = await fastify.supabase
-            .from('routes')
-            .select(`
-              id, 
-              title, 
-              description,
-              is_public,
-              cover_image,
-              created_at,
-              likes_count,
-              saved_count,
-              comments_count,
-              user_id,
-              users:user_id (
-                id, 
-                username, 
-                full_name,
-                avatar_url
-              )
-            `)
-            .eq('is_public', true)
-            .order('created_at', { ascending: false })
-            .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
-
-          if (error) {
-            console.error('Error al obtener rutas:', error);
-            return reply.code(500).send({
-              success: false,
-              message: 'Error al obtener rutas',
-              error: error.message
-            });
-          }
-
-          // Transformar los datos para que coincidan con el formato esperado
-          const routes = data.map(route => ({
-            ...route,
-            user: route.users,
-            photos: [] // Inicialmente sin fotos
-          }));
-
-          // Eliminar el campo 'users' redundante
-          routes.forEach(route => delete route.users);
-
-          return routes;
-        } catch (error) {
-          console.error('Error en ruta /routes/all:', error);
-          return reply.code(500).send({
-            success: false,
-            message: 'Error interno del servidor',
-            error: error.message
-          });
-        }
       });
 
       // Middleware para autenticación opcional (permite acceso sin autenticación)
@@ -315,76 +243,51 @@ const createApp = () => {
       // Registro de rutas de forma dinámica para evitar problemas con las rutas relativas
       console.log('Registrando rutas...');
 
-      // Rutas de API
-      try {
-        const apiTestRoutes = require(path.join(__dirname, 'routes/api/test'));
-        await fastify.register(apiTestRoutes);
-        console.log('Rutas de prueba registradas correctamente');
-      } catch (error) {
-        console.error('Error al cargar rutas de prueba:', error);
-      }
+      // Registrar todas las rutas antes de que el plugin raíz se inicialice
+      const routes = [
+        {
+          module: 'routes/api/test',
+          prefix: ''
+        },
+        {
+          module: 'routes/auth.routes',
+          prefix: '/auth'
+        },
+        {
+          module: 'routes/user.routes',
+          prefix: '/users'
+        },
+        {
+          module: 'routes/route.routes',
+          prefix: '/routes'
+        },
+        {
+          module: 'routes/place.routes',
+          prefix: '/places'
+        },
+        {
+          module: 'routes/photo.routes',
+          prefix: '/photos'
+        },
+        {
+          module: 'routes/recommendation.routes',
+          prefix: '/recommendations'
+        },
+        {
+          module: 'routes/ocr.routes',
+          prefix: '/ocr'
+        }
+      ];
 
-      // Rutas de autenticación
-      try {
-        const authRoutes = require(path.join(__dirname, 'routes/auth.routes'));
-        await fastify.register(authRoutes, { prefix: '/auth' });
-        console.log('Rutas de autenticación registradas correctamente');
-      } catch (error) {
-        console.error('Error al cargar rutas de autenticación:', error);
-      }
-
-      // Rutas de usuarios
-      try {
-        const userRoutes = require(path.join(__dirname, 'routes/user.routes'));
-        await fastify.register(userRoutes, { prefix: '/users' });
-        console.log('Rutas de usuarios registradas correctamente');
-      } catch (error) {
-        console.error('Error al cargar rutas de usuarios:', error);
-      }
-
-      // Rutas para itinerarios/rutas de viaje
-      try {
-        const routeRoutes = require(path.join(__dirname, 'routes/route.routes'));
-        await fastify.register(routeRoutes, { prefix: '/routes' });
-        console.log('Rutas de itinerarios registradas correctamente');
-      } catch (error) {
-        console.error('Error al cargar rutas de itinerarios:', error);
-      }
-
-      // Rutas para lugares dentro de rutas de viaje
-      try {
-        const placeRoutes = require(path.join(__dirname, 'routes/place.routes'));
-        await fastify.register(placeRoutes, { prefix: '/places' });
-        console.log('Rutas de lugares registradas correctamente');
-      } catch (error) {
-        console.error('Error al cargar rutas de lugares:', error);
-      }
-
-      // Rutas para gestión de fotos
-      try {
-        const photoRoutes = require(path.join(__dirname, 'routes/photo.routes'));
-        await fastify.register(photoRoutes, { prefix: '/photos' });
-        console.log('Rutas de fotos registradas correctamente');
-      } catch (error) {
-        console.error('Error al cargar rutas de fotos:', error);
-      }
-
-      // Rutas para recomendaciones
-      try {
-        const recommendationRoutes = require(path.join(__dirname, 'routes/recommendation.routes'));
-        await fastify.register(recommendationRoutes, { prefix: '/recommendations' });
-        console.log('Rutas de recomendaciones registradas correctamente');
-      } catch (error) {
-        console.error('Error al cargar rutas de recomendaciones:', error);
-      }
-
-      // Rutas para OCR y procesamiento de imágenes
-      try {
-        const ocrRoutes = require(path.join(__dirname, 'routes/ocr.routes'));
-        await fastify.register(ocrRoutes, { prefix: '/ocr' });
-        console.log('Rutas de OCR registradas correctamente');
-      } catch (error) {
-        console.error('Error al cargar rutas de OCR:', error);
+      // Registrar todas las rutas en orden
+      for (const route of routes) {
+        try {
+          const routeModule = require(path.join(__dirname, route.module));
+          await fastify.register(routeModule, { prefix: route.prefix });
+          console.log(`Rutas de ${route.module} registradas correctamente`);
+        } catch (error) {
+          console.error(`Error al cargar rutas de ${route.module}:`, error);
+        }
       }
 
       console.log('Todas las rutas registradas correctamente');
@@ -451,6 +354,7 @@ if (process.env.NODE_ENV !== 'production') {
 
   fastify.listen({ port: PORT, host: HOST }, (err) => {
     if (err) {
+      console.error('Error al iniciar el servidor:', err);
       fastify.log.error('Error al iniciar el servidor:', err);
       process.exit(1);
     }
