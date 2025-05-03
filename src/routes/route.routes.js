@@ -153,10 +153,10 @@ const schemas = {
       required: ['title'],
       properties: {
         title: { type: 'string' },
-        description: { type: 'string' },  // Nuevo campo de descripción
+        description: { type: 'string' },
         is_public: { type: 'boolean', default: true },
         cover_image: { type: 'string' },
-        photos: {  // Nueva colección de fotos para la ruta
+        photos: {
           type: 'array',
           items: {
             type: 'object',
@@ -175,7 +175,7 @@ const schemas = {
               description: { type: 'string' },
               address: { type: 'string' },
               rating: { type: 'number' },
-              photos: {  // Fotos para cada lugar
+              photos: {
                 type: 'array',
                 items: {
                   type: 'object',
@@ -261,7 +261,9 @@ const schemas = {
           route: {
             type: 'object',
             properties: {
-              id: { type: 'string' }
+              id: { type: 'string' },
+              days_count: { type: 'integer' },
+              places_count: { type: 'integer' }
             }
           }
         }
@@ -577,10 +579,13 @@ const schemas = {
           properties: {
             id: { type: 'string' },
             title: { type: 'string' },
+            description: { type: 'string' },
             is_public: { type: 'boolean' },
             likes_count: { type: 'integer' },
             saved_count: { type: 'integer' },
             comments_count: { type: 'integer' },
+            days_count: { type: 'integer' },
+            places_count: { type: 'integer' },
             cover_image: { type: 'string' },
             created_at: { type: 'string', format: 'date-time' },
             user: {
@@ -651,7 +656,28 @@ async function routeRoutes(fastify, options) {
       const routeService = new RouteService(this.supabase);
       const routes = await routeService.getAllRoutes(filters);
 
-      return reply.code(200).send(routes);
+      // Si no hay days_count o places_count, calcularlos al vuelo
+      const routesWithCounts = await Promise.all(routes.map(async (route) => {
+        if (typeof route.days_count === 'undefined' || typeof route.places_count === 'undefined') {
+          // Obtener los lugares de la ruta
+          const places = await this.supabase
+            .from('places')
+            .select('day_number')
+            .eq('route_id', route.id);
+
+          const placesData = places.data || [];
+          
+          return {
+            ...route,
+            days_count: placesData.length > 0 ? 
+              Math.max(...placesData.map(place => place.day_number || 1)) : 1,
+            places_count: placesData.length
+          };
+        }
+        return route;
+      }));
+
+      return reply.code(200).send(routesWithCounts);
     } catch (error) {
       request.log.error('Error al obtener todas las rutas públicas:', error);
 
@@ -715,13 +741,27 @@ async function routeRoutes(fastify, options) {
         places: request.body.places || []
       };
 
+      // Calcular automáticamente el número de días y lugares
+      const places = routeData.places;
+      const days_count = places.length > 0 ? 
+        Math.max(...places.map(place => place.day_number || 1)) : 1;
+      const places_count = places.length;
+
+      // Agregar los conteos al routeData
+      routeData.days_count = days_count;
+      routeData.places_count = places_count;
+
       const routeService = new RouteService(fastify.supabase);
       const route = await routeService.createRoute(routeData, userId);
 
       return reply.code(201).send({
         success: true,
         message: 'Ruta creada correctamente',
-        routeId: route.id
+        route: {
+          id: route.id,
+          days_count: days_count,
+          places_count: places_count
+        }
       });
     } catch (error) {
       request.log.error(error);
@@ -742,10 +782,22 @@ async function routeRoutes(fastify, options) {
       const userId = request.user.id;
       const routeData = request.body;
 
+      // Si hay lugares en la actualización, recalcular los conteos
+      if (routeData.places && Array.isArray(routeData.places)) {
+        const places = routeData.places;
+        routeData.days_count = places.length > 0 ? 
+          Math.max(...places.map(place => place.day_number || 1)) : 1;
+        routeData.places_count = places.length;
+      }
+
       const routeService = new RouteService(this.supabase);
       const result = await routeService.updateRoute(routeId, routeData, userId);
 
-      return reply.code(200).send(result);
+      return reply.code(200).send({
+        ...result,
+        days_count: routeData.days_count,
+        places_count: routeData.places_count
+      });
     } catch (error) {
       request.log.error(error);
 

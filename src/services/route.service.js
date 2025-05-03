@@ -865,6 +865,8 @@ class RouteService {
           likes_count,
           saved_count,
           comments_count,
+          days_count,
+          places_count,
           cover_image,
           created_at,
           updated_at,
