@@ -236,6 +236,71 @@ class RouteService {
   }
 
   /**
+   * Obtiene el país a partir de coordenadas usando la API de OpenStreetMap
+   * @param {Object} coordinates - Coordenadas {lat, lng}
+   * @returns {Promise<string>} - Nombre del país
+   */
+  async getCountryFromCoordinates(coordinates) {
+    try {
+      // Validación más estricta de coordenadas
+      if (!coordinates || 
+          typeof coordinates !== 'object' ||
+          typeof coordinates.lat !== 'number' ||
+          typeof coordinates.lng !== 'number' ||
+          isNaN(coordinates.lat) ||
+          isNaN(coordinates.lng)) {
+        console.warn('Coordenadas inválidas:', coordinates);
+        return null;
+      }
+
+      // Validar rango de coordenadas
+      if (coordinates.lat < -90 || coordinates.lat > 90 || 
+          coordinates.lng < -180 || coordinates.lng > 180) {
+        console.warn('Coordenadas fuera de rango:', coordinates);
+        return null;
+      }
+
+      console.log('Realizando geocodificación inversa para:', coordinates);
+
+      // Agregar un User-Agent para cumplir con los términos de uso de Nominatim
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${coordinates.lat}&lon=${coordinates.lng}&format=json&accept-language=es`,
+        {
+          headers: {
+            'User-Agent': 'NomadaApp/1.0',
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        console.error('Error en la respuesta de Nominatim:', response.status, response.statusText);
+        return null;
+      }
+
+      const data = await response.json();
+      console.log('Respuesta de Nominatim:', JSON.stringify(data));
+      
+      // Intentar obtener el país de diferentes maneras
+      const country = data.address?.country || 
+                     data.address?.country_name ||
+                     data.country;
+      
+      if (!country) {
+        console.warn('No se pudo encontrar el país en la respuesta:', data);
+        return null;
+      }
+      
+      console.log(`País detectado para coordenadas (${coordinates.lat}, ${coordinates.lng}):`, country);
+      
+      return country;
+    } catch (error) {
+      console.error('Error al obtener país desde coordenadas:', error);
+      return null;
+    }
+  }
+
+  /**
    * Crea una nueva ruta de viaje
    * @param {Object} routeData - Datos de la ruta
    * @param {string} userId - ID del usuario creador
@@ -246,8 +311,8 @@ class RouteService {
       places = [],
       is_public = true,
       cover_image = null,
-      description = '',  // Nueva descripción
-      photos = [],       // Colección de fotos (URLs de Cloudinary)
+      description = '',
+      photos = [],
       title
     } = routeData;
 
@@ -271,20 +336,66 @@ class RouteService {
         placesCount: places.length
       }));
 
+      // Determinar el país basado en el primer lugar si tiene coordenadas
+      let country = null;
+      if (places.length > 0) {
+        console.log('Primer lugar:', JSON.stringify(places[0]));
+        
+        let coordinates = places[0].coordinates;
+        
+        // Si las coordenadas vienen como string, convertirlas a objeto
+        if (typeof coordinates === 'string') {
+          try {
+            // Intentar extraer lat y lng del formato "(lat,lng)"
+            const match = coordinates.match(/\(([-\d.]+),([-\d.]+)\)/);
+            if (match) {
+              coordinates = {
+                lat: parseFloat(match[1]),
+                lng: parseFloat(match[2])
+              };
+            }
+          } catch (error) {
+            console.error('Error al parsear coordenadas:', error);
+          }
+        }
+
+        console.log('Coordenadas procesadas:', coordinates);
+
+        if (coordinates && typeof coordinates === 'object') {
+          try {
+            country = await this.getCountryFromCoordinates(coordinates);
+            console.log('País detectado:', country);
+          } catch (error) {
+            console.error('Error al obtener país:', error);
+          }
+        } else {
+          console.warn('Coordenadas no válidas en el primer lugar');
+        }
+      }
+
       // 1. Crear la ruta
-      const { data: route, error } = await this.supabase
+      const routeInsert = {
+        user_id: userId,
+        title: routeData.title,
+        description: routeData.description,
+        is_public: routeData.is_public !== undefined ? routeData.is_public : true,
+        cover_image: routeData.cover_image,
+        // Añadir explícitamente los conteos calculados
+        days_count: routeData.days_count || 1,
+        places_count: routeData.places_count || 0
+      };
+
+      // Solo agregar country si se detectó uno
+      if (country) {
+        routeInsert.country = country;
+      }
+
+      console.log('Datos a insertar en la ruta:', routeInsert);
+
+      const { data: newRoute, error } = await this.supabase
         .from('routes')
-        .insert({
-          user_id: userId,
-          title,
-          description,      // Nuevo campo
-          is_public,
-          cover_image,
-          likes_count: 0,
-          saved_count: 0,
-          comments_count: 0
-        })
-        .select()
+        .insert(routeInsert)
+        .select('id, created_at')
         .single();
 
       if (error) {
@@ -292,17 +403,17 @@ class RouteService {
         throw new Error(`Error al crear la ruta: ${error.message || error.details || 'Error en la base de datos'}`);
       }
 
-      if (!route || !route.id) {
+      if (!newRoute || !newRoute.id) {
         throw new Error('La ruta se creó pero no se pudo obtener su ID');
       }
 
-      console.log('Ruta creada con ID:', route.id);
+      console.log('Ruta creada con ID:', newRoute.id);
 
       // 2. Añadir las fotos de la ruta (URLs de Cloudinary)
       if (photos && photos.length > 0) {
         const routePhotos = photos.map((photo, index) => {
           return {
-            route_id: route.id,
+            route_id: newRoute.id,
             public_url: photo.url,         // URL de Cloudinary
             caption: photo.caption || '',
             order_index: index + 1
@@ -347,7 +458,7 @@ class RouteService {
           }
 
           return {
-            route_id: route.id,
+            route_id: newRoute.id,
             name,
             description,
             coordinates: coordStr,
@@ -379,7 +490,7 @@ class RouteService {
           const { error: deleteError } = await this.supabase
             .from('routes')
             .delete()
-            .eq('id', route.id);
+            .eq('id', newRoute.id);
 
           if (deleteError) {
             console.error('Error adicional al intentar eliminar la ruta:', deleteError);
@@ -421,7 +532,7 @@ class RouteService {
         success: true,
         message: 'Ruta creada exitosamente',
         route: {
-          id: route.id
+          id: newRoute.id
         }
       };
     } catch (error) {
