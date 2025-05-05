@@ -39,7 +39,8 @@ class RouteService {
           cover_image,
           created_at,
           updated_at,
-          user_id
+          user_id,
+          country
         `)
         .order('created_at', { ascending: false });
 
@@ -128,7 +129,8 @@ class RouteService {
           cover_image,
           user_id,
           created_at,
-          updated_at
+          updated_at,
+          country
         `)
         .eq('id', routeId)
         .single();
@@ -802,7 +804,8 @@ class RouteService {
           cover_image,
           created_at,
           updated_at,
-          user_id
+          user_id,
+          country
         `)
         .eq('id', routeId)
         .single();
@@ -981,7 +984,8 @@ class RouteService {
           cover_image,
           created_at,
           updated_at,
-          user_id
+          user_id,
+          country
         `)
         .eq('is_public', true) // Solo rutas públicas
         .order('created_at', { ascending: false }); // Orden cronológico: de más reciente a más antiguo

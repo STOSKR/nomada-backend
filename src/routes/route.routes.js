@@ -38,6 +38,7 @@ const schemas = {
             comments_count: { type: 'integer' },
             cover_image: { type: 'string' },
             created_at: { type: 'string', format: 'date-time' },
+            country: { type: 'string', nullable: true },
             photos: { // Nueva colección de fotos
               type: 'array',
               items: {
@@ -88,6 +89,7 @@ const schemas = {
           saved_count: { type: 'integer' },
           comments_count: { type: 'integer' },
           cover_image: { type: 'string' },
+          country: { type: 'string', nullable: true },
           created_at: { type: 'string', format: 'date-time' },
           user: {
             type: 'object',
@@ -587,6 +589,7 @@ const schemas = {
             days_count: { type: 'integer' },
             places_count: { type: 'integer' },
             cover_image: { type: 'string' },
+            country: { type: 'string', nullable: true },
             created_at: { type: 'string', format: 'date-time' },
             user: {
               type: 'object',
