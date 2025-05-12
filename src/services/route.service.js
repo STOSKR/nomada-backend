@@ -160,7 +160,7 @@ class RouteService {
       // Obtener información del usuario creador
       const { data: user, error: userError } = await this.supabase
         .from('users')
-        .select('id, username, full_name, avatar_url, nomada_id')
+        .select('id, username, avatar_url, nomada_id')
         .eq('id', route.user_id)
         .single();
 
@@ -245,19 +245,19 @@ class RouteService {
   async getCountryFromCoordinates(coordinates) {
     try {
       // Validación más estricta de coordenadas
-      if (!coordinates || 
-          typeof coordinates !== 'object' ||
-          typeof coordinates.lat !== 'number' ||
-          typeof coordinates.lng !== 'number' ||
-          isNaN(coordinates.lat) ||
-          isNaN(coordinates.lng)) {
+      if (!coordinates ||
+        typeof coordinates !== 'object' ||
+        typeof coordinates.lat !== 'number' ||
+        typeof coordinates.lng !== 'number' ||
+        isNaN(coordinates.lat) ||
+        isNaN(coordinates.lng)) {
         console.warn('Coordenadas inválidas:', coordinates);
         return null;
       }
 
       // Validar rango de coordenadas
-      if (coordinates.lat < -90 || coordinates.lat > 90 || 
-          coordinates.lng < -180 || coordinates.lng > 180) {
+      if (coordinates.lat < -90 || coordinates.lat > 90 ||
+        coordinates.lng < -180 || coordinates.lng > 180) {
         console.warn('Coordenadas fuera de rango:', coordinates);
         return null;
       }
@@ -282,19 +282,19 @@ class RouteService {
 
       const data = await response.json();
       console.log('Respuesta de Nominatim:', JSON.stringify(data));
-      
+
       // Intentar obtener el país de diferentes maneras
-      const country = data.address?.country || 
-                     data.address?.country_name ||
-                     data.country;
-      
+      const country = data.address?.country ||
+        data.address?.country_name ||
+        data.country;
+
       if (!country) {
         console.warn('No se pudo encontrar el país en la respuesta:', data);
         return null;
       }
-      
+
       console.log(`País detectado para coordenadas (${coordinates.lat}, ${coordinates.lng}):`, country);
-      
+
       return country;
     } catch (error) {
       console.error('Error al obtener país desde coordenadas:', error);
@@ -342,9 +342,9 @@ class RouteService {
       let country = null;
       if (places.length > 0) {
         console.log('Primer lugar:', JSON.stringify(places[0]));
-        
+
         let coordinates = places[0].coordinates;
-        
+
         // Si las coordenadas vienen como string, convertirlas a objeto
         if (typeof coordinates === 'string') {
           try {

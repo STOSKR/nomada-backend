@@ -96,7 +96,9 @@ const schemas = {
             properties: {
               id: { type: 'string' },
               username: { type: 'string' },
-              full_name: { type: 'string' }
+              full_name: { type: 'string' },
+              nomada_id: { type: 'string' },
+              avatar_url: { type: 'string' }
             }
           },
           photos: {  // Nueva colección de fotos para la ruta
@@ -669,10 +671,10 @@ async function routeRoutes(fastify, options) {
             .eq('route_id', route.id);
 
           const placesData = places.data || [];
-          
+
           return {
             ...route,
-            days_count: placesData.length > 0 ? 
+            days_count: placesData.length > 0 ?
               Math.max(...placesData.map(place => place.day_number || 1)) : 1,
             places_count: placesData.length
           };
@@ -704,7 +706,7 @@ async function routeRoutes(fastify, options) {
       const userId = request.user?.id || null;
 
       const routeService = new RouteService(this.supabase);
-      const route = await routeService.getRouteById(routeId, userId);
+      const route = await routeService.getRouteDetail(routeId, userId);
 
       return reply.code(200).send(route);
     } catch (error) {
@@ -746,7 +748,7 @@ async function routeRoutes(fastify, options) {
 
       // Calcular automáticamente el número de días y lugares
       const places = routeData.places;
-      const days_count = places.length > 0 ? 
+      const days_count = places.length > 0 ?
         Math.max(...places.map(place => place.day_number || 1)) : 1;
       const places_count = places.length;
 
@@ -788,7 +790,7 @@ async function routeRoutes(fastify, options) {
       // Si hay lugares en la actualización, recalcular los conteos
       if (routeData.places && Array.isArray(routeData.places)) {
         const places = routeData.places;
-        routeData.days_count = places.length > 0 ? 
+        routeData.days_count = places.length > 0 ?
           Math.max(...places.map(place => place.day_number || 1)) : 1;
         routeData.places_count = places.length;
       }
