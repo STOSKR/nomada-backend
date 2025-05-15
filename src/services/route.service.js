@@ -40,7 +40,9 @@ class RouteService {
           created_at,
           updated_at,
           user_id,
-          country
+          country,
+          location,
+          coordinates
         `)
         .order('created_at', { ascending: false });
 
@@ -97,6 +99,7 @@ class RouteService {
       // Añadir la información de usuario a cada ruta
       const routesWithUsers = routes.map(route => ({
         ...route,
+        coordinates: this.transformCoordinates(route.coordinates),
         user: userMap[route.user_id] || { id: route.user_id }
       }));
 
@@ -130,7 +133,9 @@ class RouteService {
           user_id,
           created_at,
           updated_at,
-          country
+          country,
+          location,
+          coordinates
         `)
         .eq('id', routeId)
         .single();
@@ -226,6 +231,7 @@ class RouteService {
       // Agregar los lugares y el estado del like a la respuesta
       return {
         ...route,
+        coordinates: this.transformCoordinates(route.coordinates),
         user: user || { id: route.user_id },
         photos: routePhotos || [],    // Agregamos la colección de fotos
         places: placesWithFormattedSchedules || [],
@@ -315,7 +321,9 @@ class RouteService {
       cover_image = null,
       description = '',
       photos = [],
-      title
+      title,
+      location,
+      coordinates
     } = routeData;
 
     try {
@@ -382,10 +390,17 @@ class RouteService {
         description: routeData.description,
         is_public: routeData.is_public !== undefined ? routeData.is_public : true,
         cover_image: routeData.cover_image,
+        location: routeData.location,
         // Añadir explícitamente los conteos calculados
         days_count: routeData.days_count || 1,
         places_count: routeData.places_count || 0
       };
+
+      // Si hay coordenadas, convertirlas al formato point para PostgreSQL
+      if (routeData.coordinates && routeData.coordinates.lat && routeData.coordinates.lng) {
+        // Para el tipo POINT, PostgreSQL usa el formato (x,y) donde x=longitud y y=latitud
+        routeInsert.coordinates = `(${routeData.coordinates.lng},${routeData.coordinates.lat})`;
+      }
 
       // Solo agregar country si se detectó uno
       if (country) {
@@ -587,19 +602,32 @@ class RouteService {
         cover_image,
         description,        // Nueva descripción
         title,              // Permitir actualizar el título
-        photos = []         // Fotos actualizadas (URLs de Cloudinary)
+        photos = [],         // Fotos actualizadas (URLs de Cloudinary)
+        location,           // Campo location para ubicación
+        coordinates         // Campo coordinates para coordenadas
       } = routeData;
 
       // Actualizar la ruta
+      const updateData = {
+        updated_at: new Date().toISOString()
+      };
+
+      // Añadir solo los campos que vienen en la actualización
+      if (title !== undefined) updateData.title = title;
+      if (description !== undefined) updateData.description = description;
+      if (is_public !== undefined) updateData.is_public = is_public;
+      if (cover_image !== undefined) updateData.cover_image = cover_image;
+      if (location !== undefined) updateData.location = location;
+
+      // Si hay coordenadas, convertirlas al formato point para PostgreSQL
+      if (coordinates && coordinates.lat && coordinates.lng) {
+        // Para el tipo POINT, PostgreSQL usa el formato (x,y) donde x=longitud y y=latitud
+        updateData.coordinates = `(${coordinates.lng},${coordinates.lat})`;
+      }
+
       const { error: updateError } = await this.supabase
         .from('routes')
-        .update({
-          is_public,
-          cover_image,
-          description,       // Actualizar descripción
-          title,             // Actualizar título si se proporcionó
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', routeId);
 
       if (updateError) {
@@ -985,7 +1013,9 @@ class RouteService {
           created_at,
           updated_at,
           user_id,
-          country
+          country,
+          location,
+          coordinates
         `)
         .eq('is_public', true) // Solo rutas públicas
         .order('created_at', { ascending: false }); // Orden cronológico: de más reciente a más antiguo
@@ -1074,8 +1104,12 @@ class RouteService {
         // Añadir las fotos de la ruta
         const routePhotos = photosMap[route.id] || [];
 
+        // Transformar coordenadas de POINT a formato JSON
+        const jsonCoordinates = this.transformCoordinates(route.coordinates);
+
         return {
           ...route,
+          coordinates: jsonCoordinates,
           photos: routePhotos,
           user: userData || {
             id: route.user_id,
@@ -1196,6 +1230,33 @@ class RouteService {
     } catch (error) {
       console.error('Error completo al obtener fotos del lugar:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Transforma coordenadas de formato POINT de PostgreSQL al formato JSON usado por el frontend
+   * @param {string|null} pointCoordinates - Coordenadas en formato POINT "(lng,lat)"
+   * @returns {Object|null} - Coordenadas en formato JSON {lat, lng}
+   */
+  transformCoordinates(pointCoordinates) {
+    if (!pointCoordinates) return null;
+
+    // Si ya es un objeto, devolverlo tal cual
+    if (typeof pointCoordinates === 'object') return pointCoordinates;
+
+    try {
+      // Extraer lat y lng del formato "(lng,lat)" de PostgreSQL POINT
+      const match = pointCoordinates.match(/\(([-\d.]+),([-\d.]+)\)/);
+      if (match) {
+        return {
+          lng: parseFloat(match[1]),
+          lat: parseFloat(match[2])
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error transformando coordenadas:', error);
+      return null;
     }
   }
 }

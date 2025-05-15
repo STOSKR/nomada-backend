@@ -38,7 +38,15 @@ const schemas = {
             comments_count: { type: 'integer' },
             cover_image: { type: 'string' },
             created_at: { type: 'string', format: 'date-time' },
-            country: { type: 'string', nullable: true },
+            location: { type: 'string', nullable: true },
+            coordinates: {
+              type: 'object',
+              properties: {
+                lat: { type: 'number' },
+                lng: { type: 'number' }
+              },
+              nullable: true
+            },
             photos: { // Nueva colección de fotos
               type: 'array',
               items: {
@@ -89,7 +97,15 @@ const schemas = {
           saved_count: { type: 'integer' },
           comments_count: { type: 'integer' },
           cover_image: { type: 'string' },
-          country: { type: 'string', nullable: true },
+          location: { type: 'string', nullable: true },
+          coordinates: {
+            type: 'object',
+            properties: {
+              lat: { type: 'number' },
+              lng: { type: 'number' }
+            },
+            nullable: true
+          },
           created_at: { type: 'string', format: 'date-time' },
           user: {
             type: 'object',
@@ -154,12 +170,20 @@ const schemas = {
     security: [{ apiKey: [] }],
     body: {
       type: 'object',
-      required: ['title'],
+      required: ['title', 'location'],
       properties: {
         title: { type: 'string' },
         description: { type: 'string' },
         is_public: { type: 'boolean', default: true },
         cover_image: { type: 'string' },
+        location: { type: 'string' },
+        coordinates: {
+          type: 'object',
+          properties: {
+            lat: { type: 'number' },
+            lng: { type: 'number' }
+          }
+        },
         photos: {
           type: 'array',
           items: {
@@ -294,6 +318,14 @@ const schemas = {
         description: { type: 'string' },  // Nuevo campo descripción
         is_public: { type: 'boolean' },
         cover_image: { type: 'string' },
+        location: { type: 'string' },
+        coordinates: {
+          type: 'object',
+          properties: {
+            lat: { type: 'number' },
+            lng: { type: 'number' }
+          }
+        },
         photos: {  // Nueva colección de fotos
           type: 'array',
           items: {
@@ -591,7 +623,15 @@ const schemas = {
             days_count: { type: 'integer' },
             places_count: { type: 'integer' },
             cover_image: { type: 'string' },
-            country: { type: 'string', nullable: true },
+            location: { type: 'string', nullable: true },
+            coordinates: {
+              type: 'object',
+              properties: {
+                lat: { type: 'number' },
+                lng: { type: 'number' }
+              },
+              nullable: true
+            },
             created_at: { type: 'string', format: 'date-time' },
             user: {
               type: 'object',
@@ -755,6 +795,45 @@ async function routeRoutes(fastify, options) {
       // Agregar los conteos al routeData
       routeData.days_count = days_count;
       routeData.places_count = places_count;
+
+      // Si no hay coordenadas definidas y hay lugares, usar las del primer lugar con una variación aleatoria
+      if (!routeData.coordinates && places.length > 0 && places[0].coordinates) {
+        const firstPlace = places[0];
+        const randomOffset = Math.random() * 0.001 - 0.0005; // Valor aleatorio entre -0.0005 y 0.0005
+
+        // Extraer lat y lng del primer lugar
+        let lat, lng;
+
+        // Si las coordenadas vienen como string "(lat,lng)", extraerlas
+        if (typeof firstPlace.coordinates === 'string') {
+          const match = firstPlace.coordinates.match(/\(([-\d.]+),([-\d.]+)\)/);
+          if (match) {
+            lng = parseFloat(match[1]);
+            lat = parseFloat(match[2]);
+          }
+        } else if (firstPlace.coordinates.lat && firstPlace.coordinates.lng) {
+          // Si vienen como objeto {lat, lng}
+          lat = firstPlace.coordinates.lat;
+          lng = firstPlace.coordinates.lng;
+        }
+
+        // Si se pudieron extraer las coordenadas, generar con variación aleatoria
+        if (lat && lng) {
+          routeData.coordinates = {
+            lat: lat + randomOffset,
+            lng: lng + randomOffset
+          };
+          console.log(`Coordenadas generadas automáticamente: ${JSON.stringify(routeData.coordinates)}`);
+        }
+      }
+
+      // Si no hay location definida y hay lugares, usar la dirección o nombre del primer lugar
+      if (!routeData.location && places.length > 0) {
+        const firstPlace = places[0];
+        // Preferir la dirección, si no existe usar el nombre
+        routeData.location = firstPlace.address || firstPlace.name || 'Ubicación sin especificar';
+        console.log(`Location generada automáticamente: ${routeData.location}`);
+      }
 
       const routeService = new RouteService(fastify.supabase);
       const route = await routeService.createRoute(routeData, userId);
