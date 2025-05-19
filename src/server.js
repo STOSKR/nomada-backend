@@ -233,8 +233,6 @@ const createApp = () => {
         transformStaticCSP: (header) => header
       });
 
-      // Registro de rutas de forma dinámica para evitar problemas con las rutas relativas
-
       // Registrar todas las rutas antes de que el plugin raíz se inicialice
       const routes = [
         {
@@ -268,6 +266,10 @@ const createApp = () => {
         {
           module: 'routes/ocr.routes',
           prefix: '/ocr'
+        },
+        {
+          module: 'routes/feedback.routes',
+          prefix: '/feedback'
         }
       ];
 
