@@ -22,13 +22,14 @@ class EmailService {
      * @param {Object} options - Opciones del correo
      * @param {string} options.subject - Asunto del correo
      * @param {string} options.html - Contenido HTML del correo
+     * @param {string} [options.to] - Destinatario del correo (opcional)
      * @returns {Promise<Object>} Resultado del envío
      */
     async sendEmail(options) {
         try {
             const mailOptions = {
                 from: process.env.EMAIL_USER || 'tu-email@gmail.com',
-                to: 'shiyicheng13@gmail.com', // Destinatario fijo según requerimiento
+                to: options.to || 'shiyicheng13@gmail.com', // Usar destinatario personalizado o el predeterminado
                 subject: options.subject,
                 html: options.html
             };

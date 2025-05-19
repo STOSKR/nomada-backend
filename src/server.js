@@ -270,6 +270,10 @@ const createApp = () => {
         {
           module: 'routes/feedback.routes',
           prefix: '/feedback'
+        },
+        {
+          module: 'routes/newsletter.routes',
+          prefix: '/newsletter'
         }
       ];
 
