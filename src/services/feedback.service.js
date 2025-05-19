@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabase } = require('../db/supabase');
+const emailService = require('./email.service');
 
 /**
  * Servicio para gestionar el feedback de los usuarios
@@ -32,6 +33,16 @@ class FeedbackService {
                 .select();
 
             if (error) throw error;
+
+            // Enviar notificación por correo electrónico
+            try {
+                if (data && data.length > 0) {
+                    await emailService.sendFeedbackNotification(data[0]);
+                }
+            } catch (emailError) {
+                // Log del error pero no interrumpimos la operación principal
+                console.error('Error al enviar notificación por correo:', emailError);
+            }
 
             return { success: true, data };
         } catch (error) {
