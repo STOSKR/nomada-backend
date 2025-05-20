@@ -11,12 +11,11 @@ async function routes(fastify, options) {
     // Esquema para la validación de datos de mensajes
     const messageSchema = {
         type: 'object',
-        required: ['userId', 'moodId'],
+        required: ['userId'],
         properties: {
             message: { type: 'string' },
             messageType: { type: 'string' },
             userId: { type: 'string' },
-            moodId: { type: 'integer' },
             timestamp: { type: 'string' }
         }
     };
@@ -39,7 +38,6 @@ async function routes(fastify, options) {
                                     message: { type: ['string', 'null'] },
                                     message_type: { type: ['string', 'null'] },
                                     user_id: { type: 'string' },
-                                    mood_id: { type: 'integer' },
                                     created_at: { type: 'string' }
                                 }
                             }

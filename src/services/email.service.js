@@ -99,7 +99,6 @@ class EmailService {
             <p><strong>Mensaje:</strong> ${message.message || 'Sin contenido'}</p>
             <p><strong>Tipo de mensaje:</strong> ${message.message_type || 'No especificado'}</p>
             <p><strong>Usuario ID:</strong> ${message.user_id}</p>
-            <p><strong>Mood ID asociado:</strong> ${message.mood_id}</p>
             <p><strong>Fecha:</strong> ${new Date(message.created_at).toLocaleString()}</p>
         `;
 
