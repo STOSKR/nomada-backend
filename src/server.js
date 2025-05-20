@@ -268,8 +268,16 @@ const createApp = () => {
           prefix: '/ocr'
         },
         {
-          module: 'routes/feedback.routes',
-          prefix: '/feedback'
+          module: 'routes/mood.routes',
+          prefix: '/moods'
+        },
+        {
+          module: 'routes/tag.routes',
+          prefix: '/tags'
+        },
+        {
+          module: 'routes/message.routes',
+          prefix: '/feedback-messages'
         },
         {
           module: 'routes/newsletter.routes',

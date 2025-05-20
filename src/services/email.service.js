@@ -43,7 +43,7 @@ class EmailService {
     }
 
     /**
-     * Envía una notificación de nuevo feedback
+     * Envía una notificación de nuevo feedback (método legacy)
      * @param {Object} feedback - Datos del feedback
      * @returns {Promise<Object>} Resultado del envío
      */
@@ -63,6 +63,44 @@ class EmailService {
             <p><strong>Comentario:</strong> ${feedback.comment || 'Sin comentario'}</p>
             <p><strong>Usuario ID:</strong> ${feedback.user_id}</p>
             <p><strong>Fecha:</strong> ${new Date(feedback.created_at).toLocaleString()}</p>
+        `;
+
+        return this.sendEmail({ subject, html });
+    }
+
+    /**
+     * Envía una notificación de nuevo estado de ánimo
+     * @param {Object} mood - Datos del estado de ánimo
+     * @returns {Promise<Object>} Resultado del envío
+     */
+    async sendMoodNotification(mood) {
+        const subject = `Nuevo estado de ánimo registrado: ${mood.mood_type}`;
+
+        const html = `
+            <h2>Se ha registrado un nuevo estado de ánimo</h2>
+            <p><strong>Estado de ánimo:</strong> ${mood.mood_type}</p>
+            <p><strong>Usuario ID:</strong> ${mood.user_id}</p>
+            <p><strong>Fecha:</strong> ${new Date(mood.created_at).toLocaleString()}</p>
+        `;
+
+        return this.sendEmail({ subject, html });
+    }
+
+    /**
+     * Envía una notificación de nuevo mensaje de feedback
+     * @param {Object} message - Datos del mensaje
+     * @returns {Promise<Object>} Resultado del envío
+     */
+    async sendMessageNotification(message) {
+        const subject = `Nuevo mensaje de feedback recibido`;
+
+        const html = `
+            <h2>Se ha recibido un nuevo mensaje de feedback</h2>
+            <p><strong>Mensaje:</strong> ${message.message || 'Sin contenido'}</p>
+            <p><strong>Tipo de mensaje:</strong> ${message.message_type || 'No especificado'}</p>
+            <p><strong>Usuario ID:</strong> ${message.user_id}</p>
+            <p><strong>Mood ID asociado:</strong> ${message.mood_id}</p>
+            <p><strong>Fecha:</strong> ${new Date(message.created_at).toLocaleString()}</p>
         `;
 
         return this.sendEmail({ subject, html });
