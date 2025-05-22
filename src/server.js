@@ -5,6 +5,8 @@ require('dotenv').config();
 
 // Importamos path para manejar rutas absolutas
 const path = require('path');
+const { Pool } = require('pg');
+const consoleUtils = require('./utils/console');
 
 // Función para crear y configurar instancia de Fastify
 const createApp = () => {
@@ -359,9 +361,11 @@ const startServer = async () => {
     await fastify.listen({ port: PORT, host: HOST });
 
     const host = HOST === '0.0.0.0' ? 'localhost' : HOST;
-    console.log(`Servidor iniciado en http://${host}:${PORT}`);
-    console.log(`Documentación disponible en http://${host}:${PORT}/documentacion`);
+
+    // Usar el módulo de consola para mostrar información del servidor
+    consoleUtils.serverStarted({ host, port: PORT });
   } catch (err) {
+    consoleUtils.error('ERROR AL INICIAR EL SERVIDOR', err);
     fastify.log.error('Error al iniciar el servidor:', err);
     process.exit(1);
   }
