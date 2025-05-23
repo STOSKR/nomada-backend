@@ -277,7 +277,10 @@ const schemas = {
               order_in_day: { type: 'integer' }
             }
           }
-        }
+        },
+        // Nuevos campos para la funcionalidad de copiar ruta
+        copiado_de_user: { type: 'string', nullable: true, description: 'ID del usuario del cual se copió la ruta' },
+        copiado_de_ruta: { type: 'string', nullable: true, description: 'ID de la ruta original desde la cual se copió' }
       }
     },
     response: {
