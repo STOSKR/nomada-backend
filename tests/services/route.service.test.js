@@ -1,38 +1,64 @@
-const RouteService = require('../src/services/route.service');
+const RouteService = require('../../src/services/route.service.js');
 
 describe('RouteService', () => {
   let routeService;
   let mockSupabase;
+  let mockQueryBuilder;
 
   beforeEach(() => {
-    // Mock de Supabase
+    // Mock de Supabase Query Builder
+    mockQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      insert: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
+      delete: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      neq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lt: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockReturnThis(),
+      like: jest.fn().mockReturnThis(),
+      ilike: jest.fn().mockReturnThis(),
+      is: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      contains: jest.fn().mockReturnThis(),
+      containedBy: jest.fn().mockReturnThis(),
+      rangeGt: jest.fn().mockReturnThis(),
+      rangeGte: jest.fn().mockReturnThis(),
+      rangeLt: jest.fn().mockReturnThis(),
+      rangeLte: jest.fn().mockReturnThis(),
+      rangeAdjacent: jest.fn().mockReturnThis(),
+      overlaps: jest.fn().mockReturnThis(),
+      textSearch: jest.fn().mockReturnThis(),
+      match: jest.fn().mockReturnThis(),
+      not: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      filter: jest.fn().mockReturnThis(),
+      order: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      range: jest.fn(() => Promise.resolve({ data: [], error: null })),
+      single: jest.fn(() => Promise.resolve({ data: null, error: null })),
+      maybeSingle: jest.fn(() => Promise.resolve({ data: null, error: null })),
+      csv: jest.fn(() => Promise.resolve({ data: '', error: null })),
+      explain: jest.fn(() => Promise.resolve({ data: null, error: null })),
+    };
+
+    // Mock de Supabase Client
     mockSupabase = {
-      from: jest.fn(() => ({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            single: jest.fn(() => Promise.resolve({ data: null, error: null })),
-            order: jest.fn(() => ({
-              range: jest.fn(() => Promise.resolve({ data: [], error: null }))
-            }))
-          })),
-          in: jest.fn(() => Promise.resolve({ data: [], error: null })),
-          order: jest.fn(() => ({
-            range: jest.fn(() => Promise.resolve({ data: [], error: null }))
-          })),
-          range: jest.fn(() => Promise.resolve({ data: [], error: null }))
+      from: jest.fn(() => mockQueryBuilder),
+      rpc: jest.fn(() => mockQueryBuilder),
+      storage: {
+        from: jest.fn(() => ({
+          upload: jest.fn(() => Promise.resolve({ data: null, error: null })),
+          download: jest.fn(() => Promise.resolve({ data: null, error: null })),
+          getPublicUrl: jest.fn(() => ({ data: { publicUrl: 'http://example.com/file.jpg' } })),
+          // ... add other storage methods if used
         })),
-        insert: jest.fn(() => ({
-          select: jest.fn(() => ({
-            single: jest.fn(() => Promise.resolve({ data: { id: 'test-id' }, error: null }))
-          }))
-        })),
-        update: jest.fn(() => ({
-          eq: jest.fn(() => Promise.resolve({ error: null }))
-        })),
-        delete: jest.fn(() => ({
-          eq: jest.fn(() => Promise.resolve({ error: null }))
-        }))
-      }))
+      },
+      auth: {
+        // ... mock auth methods if RouteService uses them
+      },
     };
 
     routeService = new RouteService(mockSupabase);

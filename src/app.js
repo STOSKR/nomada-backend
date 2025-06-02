@@ -86,6 +86,75 @@ app.register(cors, {
   credentials: true
 });
 
+// JWT para autenticación
+app.register(require('@fastify/jwt'), {
+  secret: process.env.JWT_SECRET || 'un_secreto_muy_seguro',
+  sign: {
+    expiresIn: '24h'
+  }
+});
+
+// Decorador para verificar autenticación en rutas protegidas
+app.decorate('authenticate', async function (request, reply) {
+  try {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader) {
+      throw new Error('No se proporcionó token de autenticación');
+    }
+
+    // Modificación: usar directamente el token sin necesidad de quitar "Bearer "
+    let token = authHeader;
+    // Si contiene "Bearer ", quitarlo para mantener compatibilidad
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.replace('Bearer ', '');
+    }
+
+    try {
+      const decoded = await app.jwt.verify(token);
+      request.user = { id: decoded.id };
+    } catch (err) {
+      request.log.error(`Error de verificación JWT: ${err.message}`);
+      throw new Error('Token de autenticación inválido');
+    }
+  } catch (err) {
+    return reply.code(401).send({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
+// Middleware para autenticación opcional (permite acceso sin autenticación)
+app.decorate('authenticateOptional', async function (request, reply) {
+  try {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader) {
+      // Continuar sin autenticación
+      return;
+    }
+
+    // Modificación: usar directamente el token sin necesidad de quitar "Bearer "
+    let token = authHeader;
+    // Si contiene "Bearer ", quitarlo para mantener compatibilidad
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.replace('Bearer ', '');
+    }
+
+    try {
+      const decoded = await app.jwt.verify(token);
+      const user = { id: decoded.id };
+      request.user = user;
+    } catch (error) {
+      // Error en token, pero seguimos sin autenticación
+      return;
+    }
+  } catch (err) {
+    // Continuar sin autenticación en caso de cualquier error
+  }
+});
+
 // Configuración para analizar solicitudes JSON de gran tamaño
 app.addContentTypeParser('application/json', { parseAs: 'string' }, function (req, body, done) {
   try {

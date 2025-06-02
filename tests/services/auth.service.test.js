@@ -7,24 +7,51 @@ const AuthService = require('../../src/services/auth.service');
 describe('AuthService', () => {
     let authService;
     let mockSupabase;
+    let mockQueryBuilder;
 
     beforeEach(() => {
+        // Mock query builder with fluent interface
+        const mockReturnThis = () => mockQueryBuilder;
+        
+        mockQueryBuilder = {
+            from: jest.fn(mockReturnThis),
+            select: jest.fn(mockReturnThis),
+            insert: jest.fn(mockReturnThis),
+            update: jest.fn(mockReturnThis),
+            delete: jest.fn(mockReturnThis),
+            eq: jest.fn(mockReturnThis),
+            neq: jest.fn(mockReturnThis),
+            gt: jest.fn(mockReturnThis),
+            gte: jest.fn(mockReturnThis),
+            lt: jest.fn(mockReturnThis),
+            lte: jest.fn(mockReturnThis),
+            like: jest.fn(mockReturnThis),
+            ilike: jest.fn(mockReturnThis),
+            is: jest.fn(mockReturnThis),
+            in: jest.fn(mockReturnThis),
+            not: jest.fn(mockReturnThis),
+            or: jest.fn(mockReturnThis),
+            and: jest.fn(mockReturnThis),
+            order: jest.fn(mockReturnThis),
+            limit: jest.fn(mockReturnThis),
+            range: jest.fn(mockReturnThis),
+            single: jest.fn(() => Promise.resolve({ data: null, error: null })),
+            maybeSingle: jest.fn(() => Promise.resolve({ data: null, error: null }))
+        };
+
         // Mock Supabase client
         mockSupabase = {
-            from: jest.fn(() => mockSupabase),
-            select: jest.fn(() => mockSupabase),
-            eq: jest.fn(() => mockSupabase),
-            single: jest.fn(),
-            maybeSingle: jest.fn(),
-            insert: jest.fn(() => mockSupabase),
-            update: jest.fn(() => mockSupabase),
-            delete: jest.fn(() => mockSupabase),
+            from: jest.fn(() => mockQueryBuilder),
             auth: {
                 signUp: jest.fn(),
                 signInWithPassword: jest.fn(),
                 signOut: jest.fn(),
                 getUser: jest.fn(),
-                updateUser: jest.fn()
+                updateUser: jest.fn(),
+                resetPasswordForEmail: jest.fn(),
+                admin: {
+                    deleteUser: jest.fn()
+                }
             }
         };
 
@@ -55,15 +82,14 @@ describe('AuthService', () => {
             bio: 'Test bio'
         };
 
-        it('should sign up user successfully', async () => {
-            // Mock email check (not exists)
-            mockSupabase.maybeSingle.mockResolvedValueOnce({
+        it('should sign up user successfully', async () => {            // Mock email check (not exists)
+            mockQueryBuilder.maybeSingle.mockResolvedValueOnce({
                 data: null,
                 error: null
             });
 
             // Mock nomada_id check (not exists)
-            mockSupabase.maybeSingle.mockResolvedValueOnce({
+            mockQueryBuilder.maybeSingle.mockResolvedValueOnce({
                 data: null,
                 error: null
             });
@@ -78,10 +104,12 @@ describe('AuthService', () => {
             });
 
             // Mock user creation in database
-            mockSupabase.single.mockResolvedValue({
+            mockQueryBuilder.single.mockResolvedValue({
                 data: {
                     id: 'auth-123',
-                    ...userData
+                    nomada_id: userData.nomada_id,
+                    username: userData.username,
+                    email: userData.email
                 },
                 error: null
             });
@@ -95,10 +123,8 @@ describe('AuthService', () => {
             });
             expect(result).toBeDefined();
             expect(result.user).toBeDefined();
-        });
-
-        it('should throw error if email already exists', async () => {
-            mockSupabase.maybeSingle.mockResolvedValueOnce({
+        });        it('should throw error if email already exists', async () => {
+            mockQueryBuilder.maybeSingle.mockResolvedValueOnce({
                 data: { id: 'existing-user' },
                 error: null
             });
@@ -107,15 +133,14 @@ describe('AuthService', () => {
                 .rejects.toThrow('El email ya está registrado');
         });
 
-        it('should throw error if nomada_id already exists', async () => {
-            // Mock email check (not exists)
-            mockSupabase.maybeSingle.mockResolvedValueOnce({
+        it('should throw error if nomada_id already exists', async () => {            // Mock email check (not exists)
+            mockQueryBuilder.maybeSingle.mockResolvedValueOnce({
                 data: null,
                 error: null
             });
 
             // Mock nomada_id check (exists)
-            mockSupabase.maybeSingle.mockResolvedValueOnce({
+            mockQueryBuilder.maybeSingle.mockResolvedValueOnce({
                 data: { id: 'existing-user' },
                 error: null
             });
@@ -124,15 +149,14 @@ describe('AuthService', () => {
                 .rejects.toThrow('El identificador de nómada ya está en uso');
         });
 
-        it('should throw error if auth signup fails', async () => {
-            // Mock email check (not exists)
-            mockSupabase.maybeSingle.mockResolvedValueOnce({
+        it('should throw error if auth signup fails', async () => {            // Mock email check (not exists)
+            mockQueryBuilder.maybeSingle.mockResolvedValueOnce({
                 data: null,
                 error: null
             });
 
             // Mock nomada_id check (not exists)
-            mockSupabase.maybeSingle.mockResolvedValueOnce({
+            mockQueryBuilder.maybeSingle.mockResolvedValueOnce({
                 data: null,
                 error: null
             });
@@ -146,15 +170,13 @@ describe('AuthService', () => {
             await expect(authService.signup(userData))
                 .rejects.toThrow();
         });
-    });
-
-    describe('signin', () => {
+    });    describe('login', () => {
         const credentials = {
             email: 'test@example.com',
             password: 'password123'
         };
 
-        it('should sign in user successfully', async () => {
+        it('should log in user successfully', async () => {
             const mockAuthUser = {
                 id: 'auth-123',
                 email: 'test@example.com'
@@ -177,12 +199,12 @@ describe('AuthService', () => {
             });
 
             // Mock database user fetch
-            mockSupabase.single.mockResolvedValue({
+            mockQueryBuilder.single.mockResolvedValue({
                 data: mockDbUser,
                 error: null
             });
 
-            const result = await authService.signin(credentials);
+            const result = await authService.login(credentials.email, credentials.password);
 
             expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith(credentials);
             expect(mockSupabase.from).toHaveBeenCalledWith('users');
@@ -191,13 +213,13 @@ describe('AuthService', () => {
             expect(result.session).toBeDefined();
         });
 
-        it('should throw error if signin fails', async () => {
+        it('should throw error if login fails', async () => {
             mockSupabase.auth.signInWithPassword.mockResolvedValue({
                 data: null,
                 error: { message: 'Invalid credentials' }
             });
 
-            await expect(authService.signin(credentials))
+            await expect(authService.login('test@example.com', 'password123'))
                 .rejects.toThrow();
         });
 
@@ -212,186 +234,125 @@ describe('AuthService', () => {
             });
 
             // Mock database user not found
-            mockSupabase.single.mockResolvedValue({
+            mockQueryBuilder.single.mockResolvedValue({
                 data: null,
                 error: { message: 'User not found' }
             });
 
-            await expect(authService.signin(credentials))
+            await expect(authService.login('test@example.com', 'password123'))
                 .rejects.toThrow();
         });
-    });
-
-    describe('signout', () => {
-        it('should sign out user successfully', async () => {
+    });    describe('logout', () => {
+        it('should log out user successfully', async () => {
             mockSupabase.auth.signOut.mockResolvedValue({
                 error: null
             });
 
-            await authService.signout();
+            const result = await authService.logout();
 
             expect(mockSupabase.auth.signOut).toHaveBeenCalled();
+            expect(result.success).toBe(true);
         });
 
-        it('should throw error if signout fails', async () => {
+        it('should throw error if logout fails', async () => {
             mockSupabase.auth.signOut.mockResolvedValue({
                 error: { message: 'Signout failed' }
             });
 
-            await expect(authService.signout()).rejects.toThrow();
+            await expect(authService.logout()).rejects.toThrow();
         });
-    });
-
-    describe('getCurrentUser', () => {
-        it('should get current user successfully', async () => {
-            const mockAuthUser = {
-                id: 'auth-123',
-                email: 'test@example.com'
-            };
-
+    });    describe('verifyToken', () => {
+        it('should verify token successfully', async () => {
             const mockDbUser = {
                 id: 'auth-123',
                 nomada_id: 'nomada123',
                 username: 'testuser',
-                email: 'test@example.com'
+                email: 'test@example.com',
+                bio: 'Test bio'
             };
 
-            // Mock auth get user
-            mockSupabase.auth.getUser.mockResolvedValue({
-                data: { user: mockAuthUser },
-                error: null
-            });
-
             // Mock database user fetch
-            mockSupabase.single.mockResolvedValue({
+            mockQueryBuilder.single.mockResolvedValue({
                 data: mockDbUser,
                 error: null
             });
 
-            const result = await authService.getCurrentUser();
+            const result = await authService.verifyToken('auth-123');
 
-            expect(mockSupabase.auth.getUser).toHaveBeenCalled();
             expect(mockSupabase.from).toHaveBeenCalledWith('users');
-            expect(result).toBeDefined();
+            expect(mockQueryBuilder.select).toHaveBeenCalledWith('id, nomada_id, username, email, bio');
+            expect(mockQueryBuilder.eq).toHaveBeenCalledWith('id', 'auth-123');
+            expect(result.valid).toBe(true);
+            expect(result.user).toEqual(mockDbUser);
         });
 
-        it('should return null if no authenticated user', async () => {
-            mockSupabase.auth.getUser.mockResolvedValue({
-                data: { user: null },
-                error: null
-            });
-
-            const result = await authService.getCurrentUser();
-
-            expect(result).toBeNull();
-        });
-
-        it('should throw error if user not found in database', async () => {
-            // Mock auth get user success
-            mockSupabase.auth.getUser.mockResolvedValue({
-                data: { user: { id: 'auth-123' } },
-                error: null
-            });
-
-            // Mock database user not found
-            mockSupabase.single.mockResolvedValue({
+        it('should throw error if user not found', async () => {
+            mockQueryBuilder.single.mockResolvedValue({
                 data: null,
                 error: { message: 'User not found' }
             });
 
-            await expect(authService.getCurrentUser()).rejects.toThrow();
+            await expect(authService.verifyToken('invalid-user-id'))
+                .rejects.toThrow('Token inválido o usuario no encontrado');
         });
     });
 
-    describe('changePassword', () => {
-        it('should change password successfully', async () => {
-            mockSupabase.auth.updateUser.mockResolvedValue({
-                data: { user: { id: 'auth-123' } },
+    describe('resetPassword', () => {
+        it('should send reset password email successfully', async () => {
+            mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({
                 error: null
             });
 
-            await authService.changePassword('newPassword123');
+            const result = await authService.resetPassword('test@example.com');
 
-            expect(mockSupabase.auth.updateUser).toHaveBeenCalledWith({
-                password: 'newPassword123'
-            });
+            expect(mockSupabase.auth.resetPasswordForEmail).toHaveBeenCalledWith(
+                'test@example.com',
+                { redirectTo: process.env.PASSWORD_RESET_URL || 'http://localhost:3000/reset-password' }
+            );
+            expect(result.success).toBe(true);
         });
 
-        it('should throw error if password change fails', async () => {
-            mockSupabase.auth.updateUser.mockResolvedValue({
-                data: null,
-                error: { message: 'Password change failed' }
+        it('should throw error if reset password fails', async () => {
+            mockSupabase.auth.resetPasswordForEmail.mockResolvedValue({
+                error: { message: 'Reset failed' }
             });
 
-            await expect(authService.changePassword('newPassword123'))
+            await expect(authService.resetPassword('test@example.com'))
                 .rejects.toThrow();
         });
     });
 
-    describe('updateEmail', () => {
-        it('should update email successfully', async () => {
-            const newEmail = 'newemail@example.com';
+    describe('loginWithEmail', () => {
+        it('should login with email successfully', async () => {
+            const mockData = {
+                user: { id: 'auth-123', email: 'test@example.com' },
+                session: { access_token: 'token123' }
+            };
 
-            // Mock email availability check
-            mockSupabase.maybeSingle.mockResolvedValue({
-                data: null,
+            mockSupabase.auth.signInWithPassword.mockResolvedValue({
+                data: mockData,
                 error: null
             });
 
-            // Mock auth email update
-            mockSupabase.auth.updateUser.mockResolvedValue({
-                data: { user: { id: 'auth-123', email: newEmail } },
-                error: null
-            });
+            const result = await authService.loginWithEmail('test@example.com', 'password123');
 
-            // Mock database email update
-            mockSupabase.single.mockResolvedValue({
-                data: { id: 'auth-123', email: newEmail },
-                error: null
+            expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
+                email: 'test@example.com',
+                password: 'password123'
             });
-
-            const result = await authService.updateEmail('auth-123', newEmail);
-
-            expect(mockSupabase.auth.updateUser).toHaveBeenCalledWith({
-                email: newEmail
-            });
-            expect(result).toBeDefined();
+            expect(result.success).toBe(true);
+            expect(result.session).toEqual(mockData.session);
+            expect(result.user).toEqual(mockData.user);
         });
 
-        it('should throw error if email already exists', async () => {
-            mockSupabase.maybeSingle.mockResolvedValue({
-                data: { id: 'other-user' },
-                error: null
-            });
-
-            await expect(authService.updateEmail('auth-123', 'existing@example.com'))
-                .rejects.toThrow('El email ya está registrado');
-        });
-    });
-
-    describe('deleteAccount', () => {
-        it('should delete account successfully', async () => {
-            // Mock database user deletion
-            mockSupabase.single.mockResolvedValue({
+        it('should throw error if loginWithEmail fails', async () => {
+            mockSupabase.auth.signInWithPassword.mockResolvedValue({
                 data: null,
-                error: null
+                error: { message: 'Login failed' }
             });
 
-            await authService.deleteAccount('auth-123');
-
-            expect(mockSupabase.from).toHaveBeenCalledWith('users');
-            expect(mockSupabase.delete).toHaveBeenCalled();
-            expect(mockSupabase.eq).toHaveBeenCalledWith('id', 'auth-123');
-        });
-
-        it('should throw error if deletion fails', async () => {
-            mockSupabase.single.mockResolvedValue({
-                data: null,
-                error: { message: 'Deletion failed' }
-            });
-
-            await expect(authService.deleteAccount('auth-123'))
-                .rejects.toThrow();
+            await expect(authService.loginWithEmail('test@example.com', 'wrongpassword'))
+                .rejects.toThrow('Login failed');
         });
     });
 });
