@@ -399,7 +399,7 @@ class RouteService {
       // Si hay coordenadas, convertirlas al formato point para PostgreSQL
       if (routeData.coordinates && routeData.coordinates.lat && routeData.coordinates.lng) {
         // Para el tipo POINT, PostgreSQL usa el formato (x,y) donde x=longitud y y=latitud
-        routeInsert.coordinates = `(${routeData.coordinates.lng},${routeData.coordinates.lat})`;
+        routeInsert.coordinates = `(${routeData.coordinates.lat},${routeData.coordinates.lng})`;
       }
 
       // Solo agregar country si se detectó uno
