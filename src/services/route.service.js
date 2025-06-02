@@ -551,12 +551,16 @@ class RouteService {
         route: {
           id: newRoute.id
         }
-      };
-    } catch (error) {
+      };    } catch (error) {
       console.error('Error completo al crear ruta:', error);
 
       if (typeof error === 'object' && error.code) {
         console.error('Código de error:', error.code);
+      }
+
+      // Si es un error de validación (Error regular), lanzarlo tal como está
+      if (error instanceof Error) {
+        throw error;
       }
 
       // Si el error ya está formateado como queremos, usarlo directamente
