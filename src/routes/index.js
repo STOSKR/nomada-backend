@@ -4,8 +4,8 @@ const routeRoutes = require('./route.routes');
 const placeRoutes = require('./place.routes');
 const photoRoutes = require('./photo.routes');
 const recommendationRoutes = require('./recommendation.routes');
-const ocrRoutes = require('./ocr.routes');
-const feedbackRoutes = require('./feedback.routes');
+// const ocrRoutes = require('./ocr.routes');
+// const feedbackRoutes = require('./feedback.routes');
 
 /**
  * Registro de todas las rutas de la API
@@ -13,7 +13,6 @@ const feedbackRoutes = require('./feedback.routes');
  * @param {Object} options - Opciones
  */
 async function routes(fastify, options) {
-
   // Rutas de autenticación
   fastify.register(authRoutes, { prefix: '/auth' });
 
@@ -33,10 +32,10 @@ async function routes(fastify, options) {
   fastify.register(recommendationRoutes, { prefix: '/recommendations' });
 
   // Rutas para OCR y procesamiento de imágenes
-  fastify.register(ocrRoutes, { prefix: '/ocr' });
+  // fastify.register(ocrRoutes, { prefix: '/ocr' });
 
   // Rutas para gestionar feedback de usuarios
-  fastify.register(feedbackRoutes, { prefix: '/feedback' });
+  // fastify.register(feedbackRoutes, { prefix: '/feedback' });
 }
 
 module.exports = routes; 
