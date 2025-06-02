@@ -292,6 +292,28 @@ const schemas = {
             }
         }
     },
+
+    // Esquema para eliminar imagen por public_id de Cloudinary
+    deleteImageByPublicId: {
+        description: 'Eliminar una imagen de Cloudinary usando su public_id',
+        tags: ['fotos', 'cloudinary'],
+        body: {
+            type: 'object',
+            required: ['public_id'],
+            properties: {
+                public_id: { type: 'string', description: 'Public ID de la imagen en Cloudinary' }
+            }
+        },
+        response: {
+            200: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' }
+                }
+            }
+        }
+    },
 };
 
 /**
@@ -363,15 +385,15 @@ async function photoRoutes(fastify, options) {
                 // Optimizaciones
                 quality: 'auto',
                 fetch_format: 'auto'
-            };
-
-            // Subir a Cloudinary directamente
+            };            // Subir a Cloudinary directamente
             const uploadResult = await photoService.cloudinary.uploadImage(fileBuffer, uploadOptions);
 
             return {
                 success: true,
                 message: 'Foto subida correctamente',
                 url: uploadResult.secure_url,
+                public_id: uploadResult.public_id, // Public_id correcto para eliminación
+                cloudinary_public_id: uploadResult.public_id, // Mismo valor para claridad
                 width: uploadResult.width,
                 height: uploadResult.height,
                 format: uploadResult.format,
@@ -440,15 +462,15 @@ async function photoRoutes(fastify, options) {
                 // Optimizaciones
                 quality: 'auto',
                 fetch_format: 'auto'
-            };
-
-            // Subir a Cloudinary directamente sin archivos temporales
+            };            // Subir a Cloudinary directamente sin archivos temporales
             const uploadResult = await photoService.cloudinary.uploadImage(buffer, uploadOptions);
 
             return {
                 success: true,
                 message: 'Foto en base64 subida correctamente',
                 url: uploadResult.secure_url,
+                public_id: uploadResult.public_id, // Public_id correcto para eliminación
+                cloudinary_public_id: uploadResult.public_id, // Mismo valor para claridad
                 width: uploadResult.width,
                 height: uploadResult.height,
                 format: uploadResult.format,
@@ -614,13 +636,13 @@ async function photoRoutes(fastify, options) {
 
             // Subir a Cloudinary directamente
             const uploadResult = await photoService.cloudinary.uploadImage(buffer, uploadOptions);
-            console.log('URL segura de Cloudinary:', uploadResult.secure_url);
-
-            return {
+            console.log('URL segura de Cloudinary:', uploadResult.secure_url);            return {
                 success: true,
                 message: 'Avatar subido correctamente',
                 id: avatarId,
                 url: uploadResult.secure_url,
+                public_id: avatarId, // Este es el public_id correcto para eliminación
+                cloudinary_public_id: uploadResult.public_id, // Public_id retornado por Cloudinary
                 width: uploadResult.width,
                 height: uploadResult.height,
                 format: uploadResult.format,
@@ -721,14 +743,15 @@ async function photoRoutes(fastify, options) {
                         console.error('Error en actualización RPC:', rpcError);
                         throw new Error(`No se pudo actualizar el avatar: ${rpcError.message}`);
                     }
-                }
-
-                console.log(`Avatar actualizado exitosamente para usuario ${user_id}`);
+                }                console.log(`Avatar actualizado exitosamente para usuario ${user_id}`);
 
                 return {
                     success: true,
                     message: 'Avatar actualizado correctamente',
+                    id: avatarId,
                     url: uploadResult.secure_url,
+                    public_id: avatarId, // Este es el public_id correcto para eliminación
+                    cloudinary_public_id: uploadResult.public_id, // Public_id retornado por Cloudinary
                     width: uploadResult.width,
                     height: uploadResult.height,
                     format: uploadResult.format,
@@ -863,7 +886,536 @@ async function photoRoutes(fastify, options) {
                 message: error.message
             });
         }
+    });    // Eliminar imagen de Cloudinary por public_id (sin autenticación)
+    fastify.delete('/cloudinary', {
+        schema: schemas.deleteImageByPublicId
+    }, async (request, reply) => {
+        try {
+            const { public_id } = request.body;
+
+            if (!public_id) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Se requiere el public_id de Cloudinary'
+                });
+            }
+
+            console.log('Intentando eliminar imagen con public_id:', public_id);            // Validar formato del public_id - debe ser un formato válido de Cloudinary
+            // No debe ser un UUID genérico
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(public_id)) {
+                console.log('Error: Se recibió un UUID como public_id, pero los public_id de Cloudinary tienen formato diferente');                return reply.code(400).send({
+                    success: false,
+                    message: 'El public_id proporcionado no tiene el formato correcto. Los UUIDs no son public_ids válidos de Cloudinary.',
+                    help: {
+                        message: 'Use estos endpoints alternativos que extraen automáticamente el public_id de las URLs',
+                        endpoints: {
+                            'Delete photo by URL': 'DELETE /photo-by-url',
+                            'Delete avatar by URL': 'DELETE /avatar-by-url',
+                            'Extract public_id': 'POST /debug/extract-public-id',
+                            'Check stored URLs': 'GET /debug/avatar-urls'
+                        },
+                        note: 'Las URLs de Cloudinary contienen el public_id correcto que necesita ser extraído'
+                    }
+                });
+            }
+
+            // Eliminar directamente de Cloudinary usando el public_id
+            const result = await photoService.cloudinary.deleteImage(public_id);
+
+            console.log('Resultado de eliminación de Cloudinary:', JSON.stringify(result, null, 2));
+
+            if (result.result !== 'ok') {
+                console.log(`Eliminación falló. Resultado: ${result.result}`);
+                return reply.code(404).send({
+                    success: false,
+                    message: `Imagen no encontrada en Cloudinary. Resultado: ${result.result}`,
+                    debug: {
+                        public_id: public_id,
+                        cloudinary_result: result.result
+                    }
+                });
+            }
+
+            return {
+                success: true,
+                message: 'Imagen eliminada correctamente de Cloudinary',
+                public_id: public_id
+            };
+        } catch (error) {
+            console.error('Error al eliminar imagen de Cloudinary:', error);
+            request.log.error(error);
+
+            return reply.code(400).send({
+                success: false,
+                message: error.message,
+                debug: {
+                    public_id: request.body.public_id
+                }
+            });
+        }
+    });
+
+    // Debug endpoint: Obtener información de public_id desde URL (para debugging)
+    fastify.post('/debug/extract-public-id', {
+        schema: {
+            description: 'Extraer public_id desde una URL de Cloudinary (para debugging)',
+            tags: ['fotos', 'debug'],
+            body: {
+                type: 'object',
+                required: ['url'],
+                properties: {
+                    url: { type: 'string', description: 'URL de Cloudinary' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        url: { type: 'string' },
+                        extracted_public_id: { type: 'string' },
+                        is_cloudinary_url: { type: 'boolean' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        try {
+            const { url } = request.body;
+
+            if (!url) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Se requiere una URL'
+                });
+            }
+
+            console.log('Debug: Extrayendo public_id de URL:', url);
+
+            // Verificar si es una URL de Cloudinary
+            const isCloudinaryUrl = url.includes('cloudinary.com');
+
+            if (!isCloudinaryUrl) {
+                return {
+                    success: false,
+                    url: url,
+                    extracted_public_id: null,
+                    is_cloudinary_url: false,
+                    message: 'No es una URL de Cloudinary'
+                };
+            }
+
+            // Intentar extraer el public_id
+            try {
+                const publicId = photoService.cloudinary.extractPublicId(url);
+                console.log('Debug: Public_id extraído:', publicId);
+
+                return {
+                    success: true,
+                    url: url,
+                    extracted_public_id: publicId,
+                    is_cloudinary_url: true
+                };
+            } catch (extractError) {
+                console.error('Debug: Error al extraer public_id:', extractError);
+                return {
+                    success: false,
+                    url: url,
+                    extracted_public_id: null,
+                    is_cloudinary_url: true,
+                    message: extractError.message
+                };
+            }
+        } catch (error) {
+            console.error('Debug: Error general:', error);
+            return reply.code(400).send({
+                success: false,
+                message: error.message
+            });
+        }
+    });
+
+    // Debug endpoint to check avatar URLs in database
+    fastify.get('/debug/avatar-urls', {
+        schema: {
+            description: 'Debug: Verificar URLs de avatar almacenadas en la base de datos',
+            tags: ['debug'],
+            querystring: {
+                type: 'object',
+                properties: {
+                    user_id: { type: 'string', description: 'ID del usuario específico (opcional)' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    user_id: { type: 'string' },
+                                    username: { type: 'string' },
+                                    avatar_url: { type: 'string' },
+                                    extracted_public_id: { type: 'string' },
+                                    is_cloudinary_url: { type: 'boolean' }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        try {
+            const { user_id } = request.query;
+            
+            let query = fastify.supabase
+                .from('users')
+                .select('id, username, avatar_url')
+                .not('avatar_url', 'is', null);
+            
+            if (user_id) {
+                query = query.eq('id', user_id);
+            }
+            
+            const { data: users, error } = await query.limit(10);
+            
+            if (error) {
+                throw new Error(`Error al consultar usuarios: ${error.message}`);
+            }
+            
+            const result = users.map(user => {
+                let extractedPublicId = null;
+                let isCloudinaryUrl = false;
+                
+                if (user.avatar_url && user.avatar_url.includes('cloudinary.com')) {
+                    isCloudinaryUrl = true;
+                    try {
+                        extractedPublicId = photoService.cloudinary.extractPublicId(user.avatar_url);
+                    } catch (error) {
+                        extractedPublicId = `Error: ${error.message}`;
+                    }
+                }
+                
+                return {
+                    user_id: user.id,
+                    username: user.username,
+                    avatar_url: user.avatar_url,
+                    extracted_public_id: extractedPublicId,
+                    is_cloudinary_url: isCloudinaryUrl
+                };
+            });
+            
+            return {
+                success: true,
+                data: result
+            };
+        } catch (error) {
+            request.log.error(error);
+            return reply.code(500).send({
+                success: false,
+                message: error.message
+            });
+        }
+    });
+
+    // Utility endpoint to fix avatar public_ids in database
+    fastify.post('/debug/fix-avatar-public-ids', {
+        schema: {
+            description: 'Debug: Extraer y almacenar public_ids correctos de las URLs existentes',
+            tags: ['debug'],
+            body: {
+                type: 'object',
+                properties: {
+                    user_id: { type: 'string', description: 'ID del usuario específico (opcional, si no se proporciona se procesan todos)' },
+                    dry_run: { type: 'boolean', default: true, description: 'Si es true, solo muestra qué se haría sin hacer cambios' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        dry_run: { type: 'boolean' },
+                        processed: { type: 'integer' },
+                        updates: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    user_id: { type: 'string' },
+                                    username: { type: 'string' },
+                                    old_avatar_url: { type: 'string' },
+                                    extracted_public_id: { type: 'string' },
+                                    status: { type: 'string' }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        try {
+            const { user_id, dry_run = true } = request.body;
+            
+            let query = fastify.supabase
+                .from('users')
+                .select('id, username, avatar_url')
+                .not('avatar_url', 'is', null);
+            
+            if (user_id) {
+                query = query.eq('id', user_id);
+            }
+            
+            const { data: users, error } = await query;
+            
+            if (error) {
+                throw new Error(`Error al consultar usuarios: ${error.message}`);
+            }
+            
+            const updates = [];
+            
+            for (const user of users) {
+                if (user.avatar_url && user.avatar_url.includes('cloudinary.com')) {
+                    try {
+                        const extractedPublicId = photoService.cloudinary.extractPublicId(user.avatar_url);
+                        
+                        const updateInfo = {
+                            user_id: user.id,
+                            username: user.username,
+                            old_avatar_url: user.avatar_url,
+                            extracted_public_id: extractedPublicId,
+                            status: dry_run ? 'would_update' : 'updating'
+                        };
+                        
+                        if (!dry_run) {
+                            // Create a new field to store the public_id for deletion
+                            const { error: updateError } = await fastify.supabase
+                                .from('users')
+                                .update({ 
+                                    avatar_public_id: extractedPublicId // Add this field to store public_id
+                                })
+                                .eq('id', user.id);
+                            
+                            if (updateError) {
+                                updateInfo.status = `error: ${updateError.message}`;
+                            } else {
+                                updateInfo.status = 'updated';
+                            }
+                        }
+                        
+                        updates.push(updateInfo);
+                    } catch (error) {
+                        updates.push({
+                            user_id: user.id,
+                            username: user.username,
+                            old_avatar_url: user.avatar_url,
+                            extracted_public_id: null,
+                            status: `extraction_error: ${error.message}`
+                        });
+                    }
+                }
+            }
+            
+            return {
+                success: true,
+                dry_run,
+                processed: updates.length,
+                updates
+            };
+        } catch (error) {
+            request.log.error(error);
+            return reply.code(500).send({
+                success: false,
+                message: error.message
+            });
+        }
+    });
+
+    // Delete avatar by URL (extracts public_id automatically)
+    fastify.delete('/avatar-by-url', {
+        schema: {
+            description: 'Eliminar avatar proporcionando la URL completa de Cloudinary',
+            tags: ['fotos', 'avatar'],
+            body: {
+                type: 'object',
+                required: ['avatar_url'],
+                properties: {
+                    avatar_url: { 
+                        type: 'string', 
+                        description: 'URL completa del avatar en Cloudinary' 
+                    },
+                    user_id: { 
+                        type: 'string', 
+                        description: 'ID del usuario (opcional, para verificación)' 
+                    }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' },
+                        extracted_public_id: { type: 'string' },
+                        deletion_result: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        try {
+            const { avatar_url, user_id } = request.body;
+
+            if (!avatar_url) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Se requiere la URL del avatar'
+                });
+            }
+
+            // Verificar que es una URL de Cloudinary
+            if (!avatar_url.includes('cloudinary.com')) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'La URL proporcionada no es de Cloudinary'
+                });
+            }
+
+            let extractedPublicId;
+            try {
+                extractedPublicId = photoService.cloudinary.extractPublicId(avatar_url);
+            } catch (error) {
+                return reply.code(400).send({
+                    success: false,
+                    message: `No se pudo extraer el public_id de la URL: ${error.message}`
+                });
+            }
+
+            console.log(`Deleting avatar with extracted public_id: "${extractedPublicId}" from URL: ${avatar_url}`);
+
+            // Intentar eliminar la imagen de Cloudinary
+            const result = await photoService.cloudinary.deleteImage(extractedPublicId);
+
+            // Si se proporciona user_id, actualizar la base de datos
+            if (user_id) {
+                try {
+                    const { error: updateError } = await fastify.supabase
+                        .from('users')
+                        .update({ avatar_url: null })
+                        .eq('id', user_id);
+
+                    if (updateError) {
+                        console.warn(`Warning: Failed to update database for user ${user_id}:`, updateError);
+                    } else {
+                        console.log(`Database updated: removed avatar_url for user ${user_id}`);
+                    }
+                } catch (dbError) {
+                    console.warn(`Warning: Database update error for user ${user_id}:`, dbError);
+                }
+            }
+
+            return {
+                success: true,
+                message: result.result === 'ok' ? 
+                    'Avatar eliminado correctamente' : 
+                    `Eliminación parcial: ${result.result}`,
+                extracted_public_id: extractedPublicId,
+                deletion_result: result.result
+            };
+
+        } catch (error) {
+            console.error('Error al eliminar avatar por URL:', error);
+            return reply.code(500).send({
+                success: false,
+                message: `Error interno: ${error.message}`
+            });
+        }
+    });
+
+    // Delete photo by URL (extracts public_id automatically)
+    fastify.delete('/photo-by-url', {
+        schema: {
+            description: 'Eliminar foto proporcionando la URL completa de Cloudinary',
+            tags: ['fotos'],
+            body: {
+                type: 'object',
+                required: ['photo_url'],
+                properties: {
+                    photo_url: { 
+                        type: 'string', 
+                        description: 'URL completa de la foto en Cloudinary' 
+                    }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' },
+                        extracted_public_id: { type: 'string' },
+                        deletion_result: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        try {
+            const { photo_url } = request.body;
+
+            if (!photo_url) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Se requiere la URL de la foto'
+                });
+            }
+
+            // Verificar que es una URL de Cloudinary
+            if (!photo_url.includes('cloudinary.com')) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'La URL proporcionada no es de Cloudinary'
+                });
+            }
+
+            let extractedPublicId;
+            try {
+                extractedPublicId = photoService.cloudinary.extractPublicId(photo_url);
+            } catch (error) {
+                return reply.code(400).send({
+                    success: false,
+                    message: `No se pudo extraer el public_id de la URL: ${error.message}`
+                });
+            }
+
+            console.log(`Deleting photo with extracted public_id: "${extractedPublicId}" from URL: ${photo_url}`);
+
+            // Intentar eliminar la imagen de Cloudinary
+            const result = await photoService.cloudinary.deleteImage(extractedPublicId);
+
+            return {
+                success: true,
+                message: result.result === 'ok' ? 
+                    'Foto eliminada correctamente' : 
+                    `Eliminación parcial: ${result.result}`,
+                extracted_public_id: extractedPublicId,
+                deletion_result: result.result
+            };
+
+        } catch (error) {
+            console.error('Error al eliminar foto por URL:', error);
+            return reply.code(500).send({
+                success: false,
+                message: `Error interno: ${error.message}`
+            });
+        }
     });
 }
 
-module.exports = photoRoutes; 
+module.exports = photoRoutes;

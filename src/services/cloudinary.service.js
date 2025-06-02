@@ -100,7 +100,6 @@ class CloudinaryService {
       throw new Error(`Error al subir imagen: ${error.message}`);
     }
   }
-
   /**
    * Elimina una imagen de Cloudinary
    * @param {string} publicId - ID público de la imagen en Cloudinary
@@ -108,10 +107,23 @@ class CloudinaryService {
    */
   async deleteImage(publicId) {
     try {
+      console.log(`CloudinaryService: Intentando eliminar imagen con public_id: "${publicId}"`);
+      
       const result = await this.cloudinary.uploader.destroy(publicId);
+      
+      console.log(`CloudinaryService: Resultado de eliminación:`, {
+        public_id: publicId,
+        result: result.result,
+        full_response: result
+      });
+      
       return result;
     } catch (error) {
-      console.error('Error al eliminar imagen de Cloudinary:', error);
+      console.error('CloudinaryService: Error al eliminar imagen:', {
+        public_id: publicId,
+        error: error.message,
+        stack: error.stack
+      });
       throw new Error(`Error al eliminar imagen: ${error.message}`);
     }
   }

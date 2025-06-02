@@ -1,6 +1,7 @@
 // Importar fastify y plugins
 const fastify = require('fastify');
 const cors = require('@fastify/cors');
+const { supabasePlugin } = require('./db/supabase'); // Importar el plugin de Supabase
 
 // Implementación para entornos serverless (como Vercel)
 const isVercelProd = process.env.VERCEL === '1';
@@ -74,6 +75,9 @@ const app = fastify({
   }
 });
 
+// Registrar el plugin de Supabase
+app.register(supabasePlugin);
+
 // Registrar CORS para permitir solicitudes desde el frontend
 app.register(cors, {
   origin: true,
@@ -105,10 +109,17 @@ app.register(require('@fastify/multipart'), {
   }
 });
 
-// Exportar funciones y configuraciones
-module.exports = {
-  upload,
-  multerHandler,
-  uploadsDir,
-  isVercelProd
-}; 
+// Registrar las rutas principales de la aplicación
+const routes = require('./routes');
+app.register(routes);
+
+// Ruta raíz para pruebas básicas y disponibilidad del servicio
+app.get('/', async (request, reply) => {
+  return { hello: 'world' };
+});
+
+// Exportar la aplicación para pruebas y para Vercel
+module.exports = async () => {
+  await app.ready();
+  return app;
+};
