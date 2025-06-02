@@ -7,6 +7,8 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "jest",
+    "test:report": "jest --config=jest.config.report.js",
+    "test:clean": "jest --coverage=false --silent",
     "seed": "node scripts/seed-db.js",
     "create-tables": "node scripts/create-tables.js"
   },
