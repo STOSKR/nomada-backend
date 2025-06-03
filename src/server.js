@@ -25,9 +25,9 @@ const createApp = () => {
       }
     }
   });
-
   // Importar plugins y componentes propios con rutas absolutas
   const { supabasePlugin, supabase } = require(path.join(__dirname, 'db/supabase'));
+  const keepaliveService = require(path.join(__dirname, 'services/keepalive.service'));
 
   // Colores para la consola
   const colors = {
@@ -148,9 +148,7 @@ const createApp = () => {
             error: error.message
           });
         }
-      });
-
-      // Añadir ruta raíz
+      });      // Añadir ruta raíz
       fastify.get('/', async (request, reply) => {
         return {
           success: true,
@@ -158,6 +156,21 @@ const createApp = () => {
           version: '1.0.0',
           serverTime: new Date().toISOString()
         };
+      });
+
+      // Endpoint de health check para keepalive
+      fastify.get('/health', async (request, reply) => {
+        return { 
+          status: 'ok', 
+          timestamp: new Date().toISOString(),
+          uptime: process.uptime(),
+          version: process.env.npm_package_version || '1.0.0'
+        };
+      });
+
+      // Endpoint para verificar el estado del keepalive (solo en desarrollo)
+      fastify.get('/keepalive/status', async (request, reply) => {
+        return keepaliveService.getStatus();
       });
 
       // Middleware para autenticación opcional (permite acceso sin autenticación)
@@ -355,7 +368,6 @@ const startServer = async () => {
   const PORT = process.env.PORT || 3000;
   const HOST = process.env.HOST || '0.0.0.0';
   const fastify = createApp();
-
   try {
     await fastify.ready();
     await fastify.listen({ port: PORT, host: HOST });
@@ -364,6 +376,13 @@ const startServer = async () => {
 
     // Usar el módulo de consola para mostrar información del servidor
     consoleUtils.serverStarted({ host, port: PORT });
+
+    // Iniciar el servicio de keepalive después de que el servidor esté listo
+    setTimeout(() => {
+      const keepaliveService = require('./services/keepalive.service');
+      keepaliveService.start();
+    }, 5000); // Esperar 5 segundos después de que el servidor esté listo
+
   } catch (err) {
     consoleUtils.error('ERROR AL INICIAR EL SERVIDOR', err);
     fastify.log.error('Error al iniciar el servidor:', err);
@@ -388,6 +407,12 @@ module.exports = {
       if (!cachedApp) {
         cachedApp = createApp();
         await cachedApp.ready();
+        
+        // Iniciar keepalive service en entorno serverless
+        setTimeout(() => {
+          const keepaliveService = require('./services/keepalive.service');
+          keepaliveService.start();
+        }, 5000);
       }
 
       cachedApp.server.emit('request', req, res);
@@ -401,4 +426,4 @@ module.exports = {
       }));
     }
   }
-}; 
+};

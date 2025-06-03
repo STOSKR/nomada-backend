@@ -182,13 +182,37 @@ app.register(require('@fastify/multipart'), {
 const routes = require('./routes');
 app.register(routes);
 
+// Importar y configurar el servicio de keepalive
+const keepaliveService = require('./services/keepalive.service');
+
 // Ruta raíz para pruebas básicas y disponibilidad del servicio
 app.get('/', async (request, reply) => {
   return { hello: 'world' };
 });
 
+// Endpoint de health check para keepalive
+app.get('/health', async (request, reply) => {
+  return { 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: process.env.npm_package_version || '1.0.0'
+  };
+});
+
+// Endpoint para verificar el estado del keepalive (solo en desarrollo)
+app.get('/keepalive/status', async (request, reply) => {
+  return keepaliveService.getStatus();
+});
+
 // Exportar la aplicación para pruebas y para Vercel
 module.exports = async () => {
   await app.ready();
+  
+  // Iniciar el servicio de keepalive después de que la app esté lista
+  setTimeout(() => {
+    keepaliveService.start();
+  }, 5000); // Esperar 5 segundos después de que la app esté lista
+  
   return app;
 };
