@@ -1,7 +1,7 @@
 /**
  * Rutas para la gestión de fotos
  */
-const PhotoService = require('../services/photo.service');
+const PhotoService = require('../services/photo.service.js');
 const { multerHandler } = require('../app'); // Importar utilidad de multer desde el módulo app
 const fs = require('fs');
 const util = require('util');
