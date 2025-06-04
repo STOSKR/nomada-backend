@@ -459,6 +459,7 @@ class RouteService {
             address = null,
             rating = null,
             schedule = null,
+            duration = null,  // Duración en minutos desde la API
             day_number = 1,
             order_in_day = index + 1,
             photos = []  // Fotos del lugar (URLs de Cloudinary)
@@ -472,9 +473,7 @@ class RouteService {
           let coordStr = null;
           if (coordinates && coordinates.lat && coordinates.lng) {
             coordStr = `(${coordinates.lat},${coordinates.lng})`;
-          }
-
-          return {
+          } return {
             route_id: newRoute.id,
             name,
             description,
@@ -482,6 +481,7 @@ class RouteService {
             address,
             rating,
             schedule,
+            duration_minutes: duration,  // Mapear duration de la API a duration_minutes en BD
             day_number,
             order_in_day,
             order_index: index + 1,
@@ -551,7 +551,8 @@ class RouteService {
         route: {
           id: newRoute.id
         }
-      };    } catch (error) {
+      };
+    } catch (error) {
       console.error('Error completo al crear ruta:', error);
 
       if (typeof error === 'object' && error.code) {

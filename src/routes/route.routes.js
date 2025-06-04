@@ -143,6 +143,7 @@ const schemas = {
                 order_in_day: { type: 'integer' },
                 day_number: { type: 'integer' },
                 order_index: { type: 'integer' },
+                duration: { type: 'number', description: 'Duración estimada de la visita en minutos' },
                 photos: {
                   type: 'array',
                   items: {
@@ -272,9 +273,9 @@ const schemas = {
                   lat: { type: 'number' },
                   lng: { type: 'number' }
                 }
-              },
-              day_number: { type: 'integer' },
-              order_in_day: { type: 'integer' }
+              }, day_number: { type: 'integer' },
+              order_in_day: { type: 'integer' },
+              duration: { type: 'number', description: 'Duración estimada de la visita en minutos' }
             }
           }
         },
@@ -579,6 +580,7 @@ const schemas = {
                 order_in_day: { type: 'integer' },
                 day_number: { type: 'integer' },
                 order_index: { type: 'integer' },
+                duration: { type: 'number', description: 'Duración estimada de la visita en minutos' },
                 photos: {
                   type: 'array',
                   items: {

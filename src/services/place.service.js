@@ -116,10 +116,15 @@ class PlaceService {
             .eq('route_id', route_id)
             .order('order_index', { ascending: false })
             .limit(1)
-            .single();
-
-        // Determinar el nuevo orden (último + 1 o 0 si no hay lugares)
+            .single();        // Determinar el nuevo orden (último + 1 o 0 si no hay lugares)
         const nextOrderIndex = lastPlace ? lastPlace.order_index + 1 : 0;
+
+        // Preparar datos para inserción, mapeando duration de la API a duration_minutes en la BD
+        const insertData = { ...otherData };
+        if (insertData.duration !== undefined) {
+            insertData.duration_minutes = insertData.duration;
+            delete insertData.duration; // Eliminar el campo original para evitar errores
+        }
 
         // Crear el lugar
         const { data: place, error } = await this.supabase
@@ -127,8 +132,8 @@ class PlaceService {
             .insert({
                 route_id,
                 coordinates: coordinates ? JSON.stringify(coordinates) : null,
-                order_index: otherData.order_index !== undefined ? otherData.order_index : nextOrderIndex,
-                ...otherData
+                order_index: insertData.order_index !== undefined ? insertData.order_index : nextOrderIndex,
+                ...insertData
             })
             .select('id, name')
             .single();
@@ -176,10 +181,14 @@ class PlaceService {
         // Verificar que el usuario sea el propietario de la ruta
         if (route.user_id !== userId) {
             throw new Error('No tienes permiso para modificar este lugar');
-        }
-
-        // Preparar datos para actualización
+        }        // Preparar datos para actualización
         const updateData = { ...placeData };
+
+        // Mapear duration de la API a duration_minutes en la BD
+        if (updateData.duration !== undefined) {
+            updateData.duration_minutes = updateData.duration;
+            delete updateData.duration; // Eliminar el campo original para evitar errores
+        }
 
         // Convertir coordenadas a formato string si existen
         if (updateData.coordinates) {
