@@ -15,19 +15,25 @@ class KeepaliveService {
   /**
    * Obtener la URL del servidor según el entorno
    * @returns {string} URL del servidor
-   */
-  getServerUrl() {
-    // En producción, usar RENDER_URL
-    if (process.env.NODE_ENV === 'production' && process.env.RENDER_URL) {
-      return process.env.RENDER_URL;
+   */  getServerUrl() {
+    // En producción, usar RENDER_URL o el dominio del servicio
+    if (process.env.NODE_ENV === 'production') {
+      if (process.env.RENDER_URL) {
+        return process.env.RENDER_URL;
+      } else if (process.env.RENDER_EXTERNAL_URL) {
+        return process.env.RENDER_EXTERNAL_URL;
+      } else if (process.env.RENDER_EXTERNAL_HOSTNAME) {
+        // Construir la URL con el hostname externo y protocolo https
+        return `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
+      }
     }
-    
+
     // En desarrollo local, usar LOCAL_URL o fallback
     if (process.env.LOCAL_URL) {
       return process.env.LOCAL_URL;
     }
-    
-    // Fallback por defecto
+
+    // Fallback por defecto - usar el puerto configurado en la aplicación
     const port = process.env.PORT || 3000;
     return `http://localhost:${port}`;
   }
@@ -48,12 +54,18 @@ class KeepaliveService {
       return response.data;
     } catch (error) {
       console.error(`[Keepalive] Error en ping: ${error.message} - ${new Date().toISOString()}`);
-      
+
       // Si es error de conexión, podría ser que el servidor esté iniciando
       if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-        console.log('[Keepalive] Servidor posiblemente iniciando, reintentando en el próximo ciclo');
+        console.log(`[Keepalive] Servidor posiblemente iniciando en ${this.serverUrl}, reintentando en el próximo ciclo`);
+      } else if (error.response) {
+        // Error con respuesta del servidor
+        console.error(`[Keepalive] Error de respuesta del servidor: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      } else if (error.request) {
+        // Error de solicitud sin respuesta
+        console.error(`[Keepalive] Error de solicitud sin respuesta a ${this.serverUrl}`);
       }
-      
+
       throw error;
     }
   }
@@ -66,13 +78,18 @@ class KeepaliveService {
       console.log('[Keepalive] El servicio ya está activo');
       return;
     }    // Solo activar en producción o si está explícitamente habilitado
-    const shouldRun = process.env.NODE_ENV === 'production' || 
-                     process.env.ENABLE_KEEPALIVE === 'true';
+    const shouldRun = process.env.NODE_ENV === 'production' ||
+      process.env.ENABLE_KEEPALIVE === 'true';
 
     if (!shouldRun) {
       console.log('[Keepalive] Servicio deshabilitado en desarrollo');
       return;
-    }
+    }    // Verificar la configuración disponible para depuración
+    console.log('[Keepalive] Configuración del entorno:');
+    console.log(`  - NODE_ENV: ${process.env.NODE_ENV || 'no definido'}`);
+    console.log(`  - RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL || 'no definido'}`);
+    console.log(`  - RENDER_EXTERNAL_HOSTNAME: ${process.env.RENDER_EXTERNAL_HOSTNAME || 'no definido'}`);
+    console.log(`  - PORT: ${process.env.PORT || '3000 (por defecto)'}`);
 
     console.log(`[Keepalive] Iniciando servicio - Ping cada ${this.intervalMinutes} minutos a ${this.serverUrl}`);
 
