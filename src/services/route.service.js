@@ -199,9 +199,10 @@ class RouteService {
       // Obtener las fotos de todos los lugares en una consulta separada
       let placePhotosMap = {};
       if (places && places.length > 0) {
-        const placeIds = places.map(place => place.id);        const { data: allPlacePhotos, error: photosError } = await this.supabase
+        const placeIds = places.map(place => place.id);
+        const { data: allPlacePhotos, error: photosError } = await this.supabase
           .from('place_photos')
-          .select('place_id, public_url, order_index')
+          .select('id, place_id, public_url, order_index')
           .in('place_id', placeIds)
           .order('order_index', { ascending: true });
 
@@ -971,13 +972,15 @@ class RouteService {
 
       if (!places || places.length === 0) {
         return [];
-      }      // Obtener las fotos de todos los lugares en una consulta separada
+      }
+
+      // Obtener las fotos de todos los lugares en una consulta separada
       let placePhotosMap = {};
       if (places && places.length > 0) {
         const placeIds = places.map(place => place.id);
         const { data: allPlacePhotos, error: photosError } = await this.supabase
           .from('place_photos')
-          .select('place_id, public_url, order_index')
+          .select('id, place_id, public_url, order_index')
           .in('place_id', placeIds)
           .order('order_index', { ascending: true });
 
