@@ -57,15 +57,12 @@ class PlaceService {
         // Si la ruta es privada, verificar que el usuario sea el propietario
         if (!route.is_public && route.user_id !== userId) {
             throw new Error('No tienes permiso para ver este lugar');
-        }
-
-        // Obtener las fotos asociadas al lugar
+        }        // Obtener las fotos asociadas al lugar
         const { data: photos, error: photosError } = await this.supabase
-            .from('photos')
+            .from('place_photos')
             .select(`
         id,
         public_url,
-        caption,
         order_index
       `)
             .eq('place_id', placeId)

@@ -172,9 +172,7 @@ class RouteService {
       if (userError) {
         console.warn('No se pudo obtener información del creador:', userError);
         // Continuar sin info del usuario
-      }
-
-      // Obtener los lugares asociados a la ruta
+      }      // Obtener los lugares asociados a la ruta
       const { data: places, error: placesError } = await this.supabase
         .from('places')
         .select(`
@@ -187,13 +185,7 @@ class RouteService {
           order_index,
           day_number,
           order_in_day,
-          schedule,
-          photos (
-            id,
-            public_url,
-            caption,
-            order_index
-          )
+          schedule
         `)
         .eq('route_id', routeId)
         .order('day_number', { ascending: true })
@@ -204,11 +196,32 @@ class RouteService {
         throw new Error('Error al obtener los lugares de la ruta');
       }
 
-      // Formatear los horarios de los lugares
+      // Obtener las fotos de todos los lugares en una consulta separada
+      let placePhotosMap = {};
+      if (places && places.length > 0) {
+        const placeIds = places.map(place => place.id);        const { data: allPlacePhotos, error: photosError } = await this.supabase
+          .from('place_photos')
+          .select('place_id, public_url, order_index')
+          .in('place_id', placeIds)
+          .order('order_index', { ascending: true });
+
+        if (photosError) {
+          console.warn('Error al obtener fotos de los lugares:', photosError);
+        } else if (allPlacePhotos) {
+          // Crear un mapa de fotos por lugar
+          allPlacePhotos.forEach(photo => {
+            if (!placePhotosMap[photo.place_id]) {
+              placePhotosMap[photo.place_id] = [];
+            }
+            placePhotosMap[photo.place_id].push(photo);
+          });
+        }
+      }      // Formatear los horarios de los lugares y agregar las fotos
       const placeService = new PlaceService(this.supabase);
       const placesWithFormattedSchedules = places.map(place => ({
         ...place,
-        formatted_schedule: placeService.formatSchedule(place.schedule)
+        formatted_schedule: placeService.formatSchedule(place.schedule),
+        photos: placePhotosMap[place.id] || []
       }));
 
       // Verificar si el usuario actual ha dado like a la ruta
@@ -934,9 +947,7 @@ class RouteService {
       // Verificar si el usuario tiene permiso para ver la ruta
       if (!route.is_public && (!userId || route.user_id !== userId)) {
         throw new Error('No tienes permiso para ver esta ruta');
-      }
-
-      // Obtener los lugares de la ruta
+      }      // Obtener los lugares de la ruta
       const { data: places, error: placesError } = await this.supabase
         .from('places')
         .select(`
@@ -948,13 +959,7 @@ class RouteService {
           rating,
           day_number,
           order_in_day,
-          schedule,
-          photos (
-            id,
-            public_url,
-            caption,
-            order_index
-          )
+          schedule
         `)
         .eq('route_id', routeId)
         .order('day_number', { ascending: true })
@@ -966,21 +971,41 @@ class RouteService {
 
       if (!places || places.length === 0) {
         return [];
+      }      // Obtener las fotos de todos los lugares en una consulta separada
+      let placePhotosMap = {};
+      if (places && places.length > 0) {
+        const placeIds = places.map(place => place.id);
+        const { data: allPlacePhotos, error: photosError } = await this.supabase
+          .from('place_photos')
+          .select('place_id, public_url, order_index')
+          .in('place_id', placeIds)
+          .order('order_index', { ascending: true });
+
+        if (photosError) {
+          console.warn('Error al obtener fotos de los lugares:', photosError);
+        } else if (allPlacePhotos) {
+          // Crear un mapa de fotos por lugar
+          allPlacePhotos.forEach(photo => {
+            if (!placePhotosMap[photo.place_id]) {
+              placePhotosMap[photo.place_id] = [];
+            }
+            placePhotosMap[photo.place_id].push(photo);
+          });
+        }
       }
 
       // Obtener los detalles adicionales para cada lugar
       const placeService = new PlaceService(this.supabase);
-      const placesWithDetails = await Promise.all(
-        places.map(async (place) => {
-          // Procesar el horario
-          const formatted_schedule = placeService.formatSchedule(place.schedule);
+      const placesWithDetails = places.map(place => {
+        // Procesar el horario
+        const formatted_schedule = placeService.formatSchedule(place.schedule);
 
-          return {
-            ...place,
-            formatted_schedule
-          };
-        })
-      );
+        return {
+          ...place,
+          formatted_schedule,
+          photos: placePhotosMap[place.id] || []
+        };
+      });
 
       return placesWithDetails;
     } catch (error) {
