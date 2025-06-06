@@ -160,8 +160,8 @@ const createApp = () => {
 
       // Endpoint de health check para keepalive
       fastify.get('/health', async (request, reply) => {
-        return { 
-          status: 'ok', 
+        return {
+          status: 'ok',
           timestamp: new Date().toISOString(),
           uptime: process.uptime(),
           version: process.env.npm_package_version || '1.0.0'
@@ -179,13 +179,10 @@ const createApp = () => {
           const authHeader = request.headers.authorization;
 
           if (!authHeader) {
-            // Continuar sin autenticación
             return;
           }
 
-          // Modificación: usar directamente el token sin necesidad de quitar "Bearer "
           let token = authHeader;
-          // Si contiene "Bearer ", quitarlo para mantener compatibilidad
           if (authHeader.startsWith('Bearer ')) {
             token = authHeader.replace('Bearer ', '');
           }
@@ -407,7 +404,7 @@ module.exports = {
       if (!cachedApp) {
         cachedApp = createApp();
         await cachedApp.ready();
-        
+
         // Iniciar keepalive service en entorno serverless
         setTimeout(() => {
           const keepaliveService = require('./services/keepalive.service');
