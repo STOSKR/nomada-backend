@@ -2,10 +2,12 @@
   "name": "nomada-backend",
   "version": "1.0.0",
   "description": "API Backend para la aplicación de viajeros Nómada",
-  "main": "src/server.js",
-  "scripts": {
+  "main": "src/server.js",  "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "build": "npm ci --omit=dev",    "prestart": "node scripts/check-env.js",
+    "check-env": "node scripts/check-env.js",
+    "pre-deploy": "node scripts/pre-deploy.js",
     "test": "jest",
     "test:report": "jest --config=jest.config.report.js",
     "test:clean": "jest --coverage=false --silent",
@@ -27,7 +29,6 @@
     "multer": "^2.0.1",
     "node-cron": "^4.1.0",
     "nodemailer": "^7.0.3",
-    "nomada-backend": "file:",
     "pg": "^8.14.1",
     "tesseract.js": "^6.0.1"
   },
@@ -37,17 +38,23 @@
     "nodemon": "^3.0.1",
     "pino-pretty": "^13.0.0",
     "supertest": "^7.1.1"
-  },
-  "engines": {
-    "node": "20.x"
+  },  "engines": {
+    "node": ">=18.0.0"
   },
   "author": "",
   "license": "ISC",
   "directories": {
     "doc": "docs"
   },
-  "keywords": [],
-  "overrides": {
-    "glob": "^9.3.5"
+  "keywords": [],  "overrides": {
+    "glob": "^9.3.5",
+    "inflight": "^1.0.6",
+    "rimraf": "^5.0.0",
+    "fast-jwt": "^4.0.0"
+  },
+  "resolutions": {
+    "glob": "^9.3.5",
+    "inflight": "^1.0.6",
+    "fast-jwt": "^4.0.0"
   }
 }

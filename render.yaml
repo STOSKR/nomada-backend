@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: nomada-backend
+    env: node
+    plan: free
+    buildCommand: npm install --legacy-peer-deps --force
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NPM_CONFIG_LEGACY_PEER_DEPS
+        value: true
+      - key: NPM_CONFIG_FORCE
+        value: true
+    healthCheckPath: /health
+    scaling:
+      minInstances: 1
+      maxInstances: 1
