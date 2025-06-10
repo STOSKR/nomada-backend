@@ -142,6 +142,55 @@ const schemas = {
         }
     },
 
+    googleCallback: {
+        description: 'Autenticación unificada con Google a través de Supabase',
+        tags: ['autenticación'],
+        body: {
+            type: 'object',
+            required: ['supabaseToken'],
+            properties: {
+                supabaseToken: { type: 'string', description: 'Token de Supabase obtenido después de la autenticación con Google' }
+            }
+        },
+        response: {
+            200: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' },
+                    token: { type: 'string' },
+                    nomada: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string' },
+                            email: { type: 'string' },
+                            nombre: { type: 'string' },
+                            nomada_id: { type: 'string' },
+                            foto_perfil: { type: 'string' },
+                            ubicacion_actual: { type: 'string' },
+                            verificado: { type: 'boolean' },
+                            created_at: { type: 'string' }
+                        }
+                    }
+                }
+            },
+            400: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' }
+                }
+            },
+            401: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' }
+                }
+            }
+        }
+    },
+
     resetPassword: {
         description: 'Solicitar restablecimiento de contraseña',
         tags: ['autenticación'],
@@ -247,6 +296,117 @@ async function authRoutes(fastify, options) {
         }
     });
 
+    // Ruta para autenticación con Google
+    fastify.post('/google-callback', { schema: schemas.googleCallback }, async (request, reply) => {
+        try {
+            const { supabaseToken } = request.body;
+
+            if (!supabaseToken) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Token de Supabase requerido'
+                });
+            }
+
+            // 1. Verificar el token de Supabase
+            const { data: supabaseUser, error } = await fastify.supabase.auth.getUser(supabaseToken);
+
+            if (error || !supabaseUser?.user) {
+                return reply.code(401).send({
+                    success: false,
+                    message: 'Token de Supabase inválido'
+                });
+            }
+
+            const googleUser = supabaseUser.user;
+
+            // 2. Buscar usuario existente por email
+            const { data: existingUser, error: findError } = await fastify.supabase
+                .from('nomadas')
+                .select('*')
+                .eq('email', googleUser.email)
+                .single();
+
+            let user;
+
+            if (existingUser) {
+                // Usuario existe, actualizar datos de Google si es necesario
+                const { data: updatedUser, error: updateError } = await fastify.supabase
+                    .from('nomadas')
+                    .update({
+                        nombre: googleUser.user_metadata?.full_name || existingUser.nombre,
+                        foto_perfil: googleUser.user_metadata?.avatar_url || existingUser.foto_perfil,
+                        auth_provider: 'google',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existingUser.id)
+                    .select()
+                    .single();
+
+                if (updateError) {
+                    throw new Error('Error actualizando usuario: ' + updateError.message);
+                }
+
+                user = updatedUser;
+            } else {
+                // Crear nuevo usuario con datos de Google
+                const nomadaId = await generateUniqueNomadaId(fastify.supabase, googleUser.user_metadata?.full_name || 'nomada');
+
+                const { data: newUser, error: createError } = await fastify.supabase
+                    .from('nomadas')
+                    .insert([{
+                        email: googleUser.email,
+                        nombre: googleUser.user_metadata?.full_name || 'Usuario Google',
+                        nomada_id: nomadaId,
+                        foto_perfil: googleUser.user_metadata?.avatar_url,
+                        auth_provider: 'google',
+                        verificado: true, // Google users are pre-verified
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    }])
+                    .select()
+                    .single();
+
+                if (createError) {
+                    throw new Error('Error creando usuario: ' + createError.message);
+                }
+
+                user = newUser;
+            }
+
+            // 3. Generar JWT token propio del backend
+            const token = fastify.jwt.sign({
+                id: user.id,
+                email: user.email,
+                nomada_id: user.nomada_id
+            });
+
+            // 4. Retornar formato consistente con login normal
+            return reply.code(200).send({
+                success: true,
+                message: 'Autenticación exitosa',
+                token,
+                nomada: {
+                    id: user.id,
+                    email: user.email,
+                    nombre: user.nombre,
+                    nomada_id: user.nomada_id,
+                    foto_perfil: user.foto_perfil,
+                    ubicacion_actual: user.ubicacion_actual,
+                    verificado: user.verificado,
+                    created_at: user.created_at
+                }
+            });
+
+        } catch (error) {
+            request.log.error('Error en Google callback:', error);
+            return reply.code(500).send({
+                success: false,
+                message: 'Error interno del servidor'
+            });
+        }
+    });
+
     // Ruta para cerrar sesión
     fastify.post('/logout', {
         schema: schemas.logout,
@@ -330,4 +490,35 @@ async function authRoutes(fastify, options) {
     });
 }
 
-module.exports = authRoutes; 
+// Función auxiliar para generar nomada_id único
+async function generateUniqueNomadaId(supabase, name) {
+    let baseId = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .substring(0, 10);
+
+    if (!baseId) baseId = 'nomada';
+
+    let counter = 1;
+    let nomadaId = baseId;
+
+    while (true) {
+        const { data, error } = await supabase
+            .from('nomadas')
+            .select('id')
+            .eq('nomada_id', nomadaId)
+            .single();
+
+        if (error && error.code === 'PGRST116') {
+            // No existe, podemos usar este ID
+            break;
+        }
+
+        nomadaId = `${baseId}${counter}`;
+        counter++;
+    }
+
+    return nomadaId;
+}
+
+module.exports = authRoutes;
