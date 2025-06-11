@@ -140,16 +140,15 @@ const schemas = {
                 }
             }
         }
-    },
-
-    googleCallback: {
+    }, googleCallback: {
         description: 'Autenticación unificada con Google a través de Supabase',
         tags: ['autenticación'],
         body: {
             type: 'object',
             required: ['supabaseToken'],
             properties: {
-                supabaseToken: { type: 'string', description: 'Token de Supabase obtenido después de la autenticación con Google' }
+                supabaseToken: { type: 'string', description: 'Token de acceso de Supabase obtenido después de la autenticación con Google' },
+                supabaseRefreshToken: { type: 'string', description: 'Token de refresh de Supabase (opcional)' }
             }
         },
         response: {
@@ -294,12 +293,12 @@ async function authRoutes(fastify, options) {
                 message: error.message
             });
         }
-    });
-
-    // Ruta para autenticación con Google
+    });    // Ruta para autenticación con Google
     fastify.post('/google-callback', { schema: schemas.googleCallback }, async (request, reply) => {
         try {
-            const { supabaseToken } = request.body;
+            console.log('Datos recibidos en google-callback:', request.body);
+
+            const { supabaseToken, supabaseRefreshToken } = request.body;
 
             if (!supabaseToken) {
                 return reply.code(400).send({
@@ -308,17 +307,44 @@ async function authRoutes(fastify, options) {
                 });
             }
 
-            // 1. Verificar el token de Supabase
-            const { data: supabaseUser, error } = await fastify.supabase.auth.getUser(supabaseToken);
+            // 1. Crear cliente de Supabase con el token del usuario
+            const { createClient } = require('@supabase/supabase-js');
+            const userSupabase = createClient(
+                process.env.SUPABASE_URL,
+                process.env.SUPABASE_KEY,
+                {
+                    global: {
+                        headers: {
+                            Authorization: `Bearer ${supabaseToken}`
+                        }
+                    }
+                }
+            );
 
-            if (error || !supabaseUser?.user) {
+            // Establecer la sesión con el token
+            const { data: sessionData, error: sessionError } = await userSupabase.auth.setSession({
+                access_token: supabaseToken,
+                refresh_token: supabaseRefreshToken || ''
+            });
+
+            if (sessionError) {
+                console.error('Error estableciendo sesión:', sessionError);
+                return reply.code(401).send({
+                    success: false,
+                    message: 'Error con la sesión de Supabase: ' + sessionError.message
+                });
+            }            // 2. Obtener datos del usuario autenticado
+            const { data: userData, error: userError } = await userSupabase.auth.getUser();
+
+            if (userError || !userData?.user) {
+                console.error('Error obteniendo usuario:', userError);
                 return reply.code(401).send({
                     success: false,
                     message: 'Token de Supabase inválido'
                 });
             }
 
-            const googleUser = supabaseUser.user;
+            const googleUser = userData.user;
 
             // 2. Buscar usuario existente por email
             const { data: existingUser, error: findError } = await fastify.supabase
