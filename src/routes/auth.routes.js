@@ -156,19 +156,29 @@ const schemas = {
                 type: 'object',
                 properties: {
                     success: { type: 'boolean' },
-                    message: { type: 'string' },
                     token: { type: 'string' },
-                    nomada: {
+                    user: {
                         type: 'object',
                         properties: {
                             id: { type: 'string' },
-                            email: { type: 'string' },
-                            nombre: { type: 'string' },
                             nomada_id: { type: 'string' },
-                            foto_perfil: { type: 'string' },
-                            ubicacion_actual: { type: 'string' },
-                            verificado: { type: 'boolean' },
-                            created_at: { type: 'string' }
+                            username: { type: 'string' },
+                            email: { type: 'string' },
+                            bio: { type: 'string' },
+                            avatar_url: { type: 'string', description: 'URL del avatar del usuario' },
+                            preferences: {
+                                type: 'object',
+                                properties: {
+                                    favoriteDestinations: { type: 'array', items: { type: 'string' } },
+                                    travelStyle: { type: 'string', enum: ['adventure', 'relax', 'culture', 'gastronomy'] },
+                                    budget: { type: 'string', enum: ['budget', 'mid-range', 'luxury'] }
+                                }
+                            },
+                            visitedCountries: { type: 'array', items: { type: 'string' } },
+                            followersCount: { type: 'number' },
+                            followingCount: { type: 'number' },
+                            routesCount: { type: 'number' },
+                            isFollowing: { type: ['boolean', 'null'] }
                         }
                     }
                 }
@@ -390,30 +400,24 @@ async function authRoutes(fastify, options) {
                 }
 
                 user = newUser;
-            }
+            } console.log('Usuario final:', user);
 
-            console.log('Usuario final:', user);            // 4. Generar JWT token propio del backend
+            // 4. Generar JWT token propio del backend
             const token = fastify.jwt.sign({
                 id: user.id,
                 email: user.email,
                 nomada_id: user.nomada_id
             });
 
-            // 5. Retornar formato consistente con login normal
+            // 5. Obtener perfil completo del usuario usando el mismo servicio que login
+            const userService = new (require('../services/user.service'))(fastify.supabase);
+            const profileData = await userService.getUserProfile(user.id, user.id);
+
+            // 6. Retornar formato consistente con login normal
             return reply.code(200).send({
                 success: true,
-                message: 'Autenticación exitosa',
                 token,
-                nomada: {
-                    id: user.id,
-                    email: user.email,
-                    nombre: user.username, // Usar username como nombre
-                    nomada_id: user.nomada_id,
-                    foto_perfil: null, // Por ahora null hasta que agregues el campo
-                    ubicacion_actual: null,
-                    verificado: true,
-                    created_at: user.created_at
-                }
+                user: profileData
             });
 
         } catch (error) {
