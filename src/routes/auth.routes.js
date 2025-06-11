@@ -15,8 +15,7 @@ const schemas = {
     signup: {
         description: 'Registrar un nuevo usuario',
         tags: ['autenticación'],
-        consumes: ['application/json'],
-        body: {
+        consumes: ['application/json'], body: {
             type: 'object',
             required: ['email', 'password', 'nomada_id'],
             additionalProperties: true,
@@ -25,7 +24,8 @@ const schemas = {
                 password: { type: 'string', minLength: 8, description: 'Contraseña (requerido, mínimo 8 caracteres)' },
                 nomada_id: { type: 'string', minLength: 3, description: 'Identificador único de usuario (requerido, mínimo 3 caracteres)' },
                 username: { type: 'string', description: 'Nombre visible del usuario' },
-                bio: { type: 'string', description: 'Biografía del usuario' }
+                bio: { type: 'string', description: 'Biografía del usuario' },
+                avatar_url: { type: 'string', description: 'URL del avatar del usuario' }
             }
         },
         response: {
@@ -244,15 +244,13 @@ async function authRoutes(fastify, options) {
                     success: false,
                     message: "Se requiere un objeto JSON válido"
                 });
-            }
-
-            const data = request.body;
+            } const data = request.body;
 
             // Log para depuración
             console.log("Datos recibidos en /signup:", data);
 
-            // El avatar se subirá en un endpoint separado, así que pasamos null aquí
-            const result = await authService.signup({ ...data, avatar_url: null });
+            // Usar el avatar_url proporcionado o null si no se envía
+            const result = await authService.signup(data);
 
             // Generar token JWT
             const token = fastify.jwt.sign({
@@ -483,10 +481,8 @@ async function authRoutes(fastify, options) {
     fastify.post('/register-simple', {}, async (request, reply) => {
         try {
             console.log('Headers:', request.headers);
-            console.log('Cuerpo recibido:', request.body);
-
-            // Extraer los datos necesarios
-            const { email, password, nomada_id, username, bio } = request.body;
+            console.log('Cuerpo recibido:', request.body);            // Extraer los datos necesarios
+            const { email, password, nomada_id, username, bio, avatar_url } = request.body;
 
             // Validación manual básica
             if (!email || !password || !nomada_id) {
@@ -496,14 +492,14 @@ async function authRoutes(fastify, options) {
                 });
             }
 
-            // Procesar el registro sin avatar
+            // Procesar el registro con avatar si se proporciona
             const result = await authService.signup({
                 email,
                 password,
                 nomada_id,
                 username: username || null,
                 bio: bio || null,
-                avatar_url: null
+                avatar_url: avatar_url || null
             });
 
             // Generar token JWT

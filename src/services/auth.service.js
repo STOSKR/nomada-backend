@@ -17,9 +17,8 @@ class AuthService {
      * Registrar un nuevo usuario
      * @param {Object} userData - Datos del usuario a registrar
      * @returns {Promise<Object>} - Usuario registrado y token de sesión
-     */
-    async signup(userData) {
-        const { email, password, nomada_id, username, bio } = userData;
+     */    async signup(userData) {
+        const { email, password, nomada_id, username, bio, avatar_url } = userData;
 
         // Verificar si el email ya está registrado
         const { data: existingEmail } = await this.supabase
@@ -51,9 +50,7 @@ class AuthService {
 
         if (authError) {
             throw new Error(`Error al registrar usuario: ${authError.message}`);
-        }
-
-        // Crear perfil en la tabla users
+        }        // Crear perfil en la tabla users
         const { data: userProfile, error: profileError } = await this.supabase
             .from('users')
             .insert({
@@ -62,10 +59,11 @@ class AuthService {
                 nomada_id,
                 username: username || null,
                 bio: bio || null,
+                avatar_url: avatar_url || null,
                 preferences: {},
                 visited_countries: []
             })
-            .select('id, nomada_id, username, email')
+            .select('id, nomada_id, username, email, avatar_url')
             .single();
 
         if (profileError) {
