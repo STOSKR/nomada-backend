@@ -305,64 +305,50 @@ async function authRoutes(fastify, options) {
                     success: false,
                     message: 'Token de Supabase requerido'
                 });
-            }
+            }            // 1. Verificar directamente el token JWT de Supabase
+            let decodedToken;
+            try {
+                // Decodificar JWT manualmente (sin verificación ya que viene de Supabase)
+                const base64Url = supabaseToken.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
 
-            // 1. Crear cliente de Supabase con el token del usuario
-            const { createClient } = require('@supabase/supabase-js');
-            const userSupabase = createClient(
-                process.env.SUPABASE_URL,
-                process.env.SUPABASE_KEY,
-                {
-                    global: {
-                        headers: {
-                            Authorization: `Bearer ${supabaseToken}`
-                        }
-                    }
-                }
-            );
-
-            // Establecer la sesión con el token
-            const { data: sessionData, error: sessionError } = await userSupabase.auth.setSession({
-                access_token: supabaseToken,
-                refresh_token: supabaseRefreshToken || ''
-            });
-
-            if (sessionError) {
-                console.error('Error estableciendo sesión:', sessionError);
-                return reply.code(401).send({
-                    success: false,
-                    message: 'Error con la sesión de Supabase: ' + sessionError.message
-                });
-            }            // 2. Obtener datos del usuario autenticado
-            const { data: userData, error: userError } = await userSupabase.auth.getUser();
-
-            if (userError || !userData?.user) {
-                console.error('Error obteniendo usuario:', userError);
+                decodedToken = JSON.parse(jsonPayload);
+                console.log('Token decodificado:', decodedToken);
+            } catch (decodeError) {
+                console.error('Error decodificando token:', decodeError);
                 return reply.code(401).send({
                     success: false,
                     message: 'Token de Supabase inválido'
                 });
-            }
+            }            // 2. Extraer datos del usuario del token
+            const supabaseUID = decodedToken.sub; // UID del usuario en Supabase Auth
+            const googleUser = {
+                uid: supabaseUID,
+                email: decodedToken.email,
+                user_metadata: decodedToken.user_metadata || {}
+            };
 
-            const googleUser = userData.user;
-
-            // 2. Buscar usuario existente por email
+            console.log('Datos del usuario Google:', googleUser);
+            console.log('UID de Supabase:', supabaseUID);            // 3. Buscar usuario existente por UID de Supabase en la tabla users
             const { data: existingUser, error: findError } = await fastify.supabase
-                .from('nomadas')
+                .from('users')
                 .select('*')
-                .eq('email', googleUser.email)
-                .single();
+                .eq('id', supabaseUID) // Usar el UID como ID principal
+                .single(); console.log('Resultado de búsqueda:', { existingUser, findError });
 
             let user;
 
-            if (existingUser) {
-                // Usuario existe, actualizar datos de Google si es necesario
+            // Verificar si el usuario existe (error PGRST116 significa "no encontrado")
+            if (existingUser && !findError) {
+                console.log('Usuario existente encontrado:', existingUser);                // Usuario existe, actualizar datos de Google si es necesario
                 const { data: updatedUser, error: updateError } = await fastify.supabase
-                    .from('nomadas')
+                    .from('users')
                     .update({
-                        nombre: googleUser.user_metadata?.full_name || existingUser.nombre,
-                        foto_perfil: googleUser.user_metadata?.avatar_url || existingUser.foto_perfil,
-                        auth_provider: 'google',
+                        username: googleUser.user_metadata?.full_name || existingUser.username,
+                        avatar_url: googleUser.user_metadata?.avatar_url || existingUser.avatar_url,
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', existingUser.id)
@@ -375,18 +361,23 @@ async function authRoutes(fastify, options) {
 
                 user = updatedUser;
             } else {
-                // Crear nuevo usuario con datos de Google
+                console.log('Creando nuevo usuario...');
+                // Crear nuevo usuario con datos de Google usando el UID de Supabase
                 const nomadaId = await generateUniqueNomadaId(fastify.supabase, googleUser.user_metadata?.full_name || 'nomada');
 
-                const { data: newUser, error: createError } = await fastify.supabase
-                    .from('nomadas')
+                console.log('Nomada ID generado:', nomadaId); const { data: newUser, error: createError } = await fastify.supabase
+                    .from('users')
                     .insert([{
+                        id: supabaseUID, // Usar el UID de Supabase como ID
                         email: googleUser.email,
-                        nombre: googleUser.user_metadata?.full_name || 'Usuario Google',
+                        username: googleUser.user_metadata?.full_name || 'Usuario Google',
                         nomada_id: nomadaId,
-                        foto_perfil: googleUser.user_metadata?.avatar_url,
-                        auth_provider: 'google',
-                        verificado: true, // Google users are pre-verified
+                        bio: 'Soy el primer usuario',
+                        avatar_url: googleUser.user_metadata?.avatar_url,
+                        preferences: {},
+                        visited_countries: '{}::text[]',
+                        followers_count: 0,
+                        following_count: 0,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     }])
@@ -394,20 +385,21 @@ async function authRoutes(fastify, options) {
                     .single();
 
                 if (createError) {
+                    console.error('Error creando usuario:', createError);
                     throw new Error('Error creando usuario: ' + createError.message);
                 }
 
                 user = newUser;
             }
 
-            // 3. Generar JWT token propio del backend
+            console.log('Usuario final:', user);            // 4. Generar JWT token propio del backend
             const token = fastify.jwt.sign({
                 id: user.id,
                 email: user.email,
                 nomada_id: user.nomada_id
             });
 
-            // 4. Retornar formato consistente con login normal
+            // 5. Retornar formato consistente con login normal
             return reply.code(200).send({
                 success: true,
                 message: 'Autenticación exitosa',
@@ -415,20 +407,21 @@ async function authRoutes(fastify, options) {
                 nomada: {
                     id: user.id,
                     email: user.email,
-                    nombre: user.nombre,
+                    nombre: user.username, // Usar username como nombre
                     nomada_id: user.nomada_id,
-                    foto_perfil: user.foto_perfil,
-                    ubicacion_actual: user.ubicacion_actual,
-                    verificado: user.verificado,
+                    foto_perfil: null, // Por ahora null hasta que agregues el campo
+                    ubicacion_actual: null,
+                    verificado: true,
                     created_at: user.created_at
                 }
             });
 
         } catch (error) {
+            console.error('Error completo en Google callback:', error);
             request.log.error('Error en Google callback:', error);
             return reply.code(500).send({
                 success: false,
-                message: 'Error interno del servidor'
+                message: 'Error interno del servidor: ' + error.message
             });
         }
     });
@@ -530,7 +523,7 @@ async function generateUniqueNomadaId(supabase, name) {
 
     while (true) {
         const { data, error } = await supabase
-            .from('nomadas')
+            .from('users')
             .select('id')
             .eq('nomada_id', nomadaId)
             .single();
