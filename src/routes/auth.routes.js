@@ -304,6 +304,7 @@ async function authRoutes(fastify, options) {
             });
         }
     });    // Ruta para autenticación con Google
+
     fastify.post('/google-callback', { schema: schemas.googleCallback }, async (request, reply) => {
         try {
             console.log('Datos recibidos en google-callback:', request.body);
@@ -349,18 +350,33 @@ async function authRoutes(fastify, options) {
                 .eq('id', supabaseUID) // Usar el UID como ID principal
                 .single(); console.log('Resultado de búsqueda:', { existingUser, findError });
 
-            let user;
-
-            // Verificar si el usuario existe (error PGRST116 significa "no encontrado")
+            let user;            // Verificar si el usuario existe (error PGRST116 significa "no encontrado")
             if (existingUser && !findError) {
-                console.log('Usuario existente encontrado:', existingUser);                // Usuario existe, actualizar datos de Google si es necesario
+                console.log('Usuario existente encontrado:', existingUser);
+
+                // Preparar objeto de actualización solo para campos vacíos/nulos
+                const updateData = {
+                    updated_at: new Date().toISOString()
+                };
+
+                // Solo actualizar username si está vacío/nulo en BD y tenemos datos de Google
+                if ((!existingUser.username || existingUser.username.trim() === '') &&
+                    googleUser.user_metadata?.full_name) {
+                    updateData.username = googleUser.user_metadata.full_name;
+                }
+
+                // Solo actualizar avatar_url si está vacío/nulo en BD y tenemos datos de Google
+                if ((!existingUser.avatar_url || existingUser.avatar_url.trim() === '') &&
+                    googleUser.user_metadata?.avatar_url) {
+                    updateData.avatar_url = googleUser.user_metadata.avatar_url;
+                }
+
+                console.log('Datos a actualizar:', updateData);
+
+                // Usuario existe, actualizar solo campos vacíos con datos de Google
                 const { data: updatedUser, error: updateError } = await fastify.supabase
                     .from('users')
-                    .update({
-                        username: googleUser.user_metadata?.full_name || existingUser.username,
-                        avatar_url: googleUser.user_metadata?.avatar_url || existingUser.avatar_url,
-                        updated_at: new Date().toISOString()
-                    })
+                    .update(updateData)
                     .eq('id', existingUser.id)
                     .select()
                     .single();
