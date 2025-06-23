@@ -40,12 +40,13 @@ class AuthService {
 
         if (existingNomadaId) {
             throw new Error('El identificador de nómada ya está en uso');
-        }
-
-        // Registrar usuario en Supabase Auth
+        }        // Registrar usuario en Supabase Auth
         const { data: authData, error: authError } = await this.supabase.auth.signUp({
             email,
             password,
+            options: {
+                emailRedirectTo: undefined // Deshabilitar confirmación de email para desarrollo
+            }
         });
 
         if (authError) {
@@ -85,15 +86,17 @@ class AuthService {
      * @param {string} email - Email del usuario
      * @param {string} password - Contraseña del usuario
      * @returns {Promise<Object>} - Datos del usuario autenticado y token
-     */
-    async login(email, password) {
+     */    async login(email, password) {
+        console.log('Intentando login con email:', email);
+
         const { data: authData, error: authError } = await this.supabase.auth.signInWithPassword({
             email,
             password,
         });
 
         if (authError) {
-            throw new Error('Credenciales incorrectas');
+            console.error('Error de autenticación en Supabase:', authError);
+            throw new Error(`Credenciales incorrectas: ${authError.message}`);
         }
 
         // Loguear el ID del usuario que se autenticó
