@@ -1,0 +1,91 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Fase de calentamiento
+    - duration: 30
+      arrivalRate: 5
+      name: "Warmup"
+    # Fase de carga normal
+    - duration: 120
+      arrivalRate: 10
+      name: "Normal Load"
+    # Fase de pico de carga
+    - duration: 60
+      arrivalRate: 25
+      name: "Peak Load"
+  variables:
+    testEmail: 'test{{$randomString()}}@example.com'
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+  ensure:
+    p95: 500  # 95% de las respuestas deben ser menores a 500ms
+    p99: 1000 # 99% de las respuestas deben ser menores a 1000ms
+    maxErrorRate: 5 # Máximo 5% de errores
+
+scenarios:
+  - name: "Health Check"
+    weight: 20
+    flow:
+      - get:
+          url: "/health"
+          name: "Health endpoint"
+
+  - name: "Authentication Flow"
+    weight: 30
+    flow:
+      # Login
+      - post:
+          url: "/auth/login"
+          name: "Login"
+          json:
+            email: "test@example.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      # Obtener perfil con token
+      - get:
+          url: "/users/profile"
+          name: "Get Profile"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  - name: "Public Endpoints"
+    weight: 25
+    flow:
+      # Obtener rutas públicas
+      - get:
+          url: "/routes"
+          name: "Get Routes"
+      
+      # Obtener lugares
+      - get:
+          url: "/places"
+          name: "Get Places"
+          qs:
+            limit: 10
+            offset: 0
+
+  - name: "Content Browsing"
+    weight: 15
+    flow:
+      # Buscar recomendaciones
+      - get:
+          url: "/recommendations"
+          name: "Get Recommendations"
+          qs:
+            limit: 5
+      
+      # Obtener tags
+      - get:
+          url: "/tags"
+          name: "Get Tags"
+
+  - name: "API Documentation"
+    weight: 10
+    flow:
+      - get:
+          url: "/documentation"
+          name: "Swagger Documentation"

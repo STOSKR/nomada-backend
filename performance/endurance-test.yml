@@ -1,0 +1,80 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Prueba de larga duración con carga constante
+    - duration: 1800  # 30 minutos
+      arrivalRate: 5
+      name: "Sustained Load Test"
+  
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+  
+  ensure:
+    p95: 800
+    p99: 1500
+    maxErrorRate: 3
+
+scenarios:
+  - name: "Long Running User Sessions"
+    weight: 60
+    flow:
+      # Simular sesiones de usuario de larga duración
+      - post:
+          url: "/auth/login"
+          name: "User login"
+          json:
+            email: "longrun@test.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.token"
+              as: "userToken"
+              default: "none"
+      
+      # Múltiples operaciones durante la sesión
+      - loop:
+          - think: 5
+          - get:
+              url: "/routes"
+              name: "Browse routes in session"
+              headers:
+                Authorization: "Bearer {{ userToken }}"
+              qs:
+                limit: 10
+          
+          - think: 3
+          - get:
+              url: "/places"
+              name: "Browse places in session"
+              headers:
+                Authorization: "Bearer {{ userToken }}"
+              qs:
+                limit: 8
+          
+          - think: 2
+          - get:
+              url: "/recommendations"
+              name: "Get recommendations in session"
+              headers:
+                Authorization: "Bearer {{ userToken }}"
+              qs:
+                limit: 5
+        count: 10
+
+  - name: "Background System Health"
+    weight: 40
+    flow:
+      # Verificaciones periódicas del sistema
+      - loop:
+          - get:
+              url: "/health"
+              name: "System health check"
+          
+          - think: 30
+          
+          - get:
+              url: "/documentation"
+              name: "API documentation access"
+          
+          - think: 60
+        count: 30

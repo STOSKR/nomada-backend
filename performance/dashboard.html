@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nomada Backend - Performance Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            padding: 30px;
+        }
+
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .test-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            border-left: 5px solid #007bff;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .test-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .test-card h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .test-card p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .test-specs {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .test-specs ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .test-specs li {
+            padding: 5px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .test-specs li:last-child {
+            border-bottom: none;
+        }
+
+        .test-specs strong {
+            color: #495057;
+        }
+
+        .run-button {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .run-button:hover {
+            background: linear-gradient(135deg, #218838 0%, #1ea085 100%);
+            transform: translateY(-2px);
+        }
+
+        .commands-section {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            margin-top: 20px;
+            border-radius: 10px;
+        }
+
+        .commands-section h2 {
+            margin-bottom: 20px;
+            color: #ecf0f1;
+        }
+
+        .command-group {
+            margin-bottom: 20px;
+        }
+
+        .command-group h4 {
+            color: #3498db;
+            margin-bottom: 10px;
+        }
+
+        .command {
+            background: #34495e;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-bottom: 8px;
+            border-left: 3px solid #e74c3c;
+        }
+
+        .metrics-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .metrics-info h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .metric-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #f39c12;
+        }
+
+        .metric-item strong {
+            color: #e67e22;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            border-top: 1px solid #dee2e6;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .dashboard {
+                padding: 20px;
+            }
+
+            .test-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Nomada Backend</h1>
+            <p>Panel de Pruebas de Rendimiento con Artillery</p>
+        </div>
+
+        <div class="dashboard">
+            <div class="test-grid">
+                <div class="test-card">
+                    <h3>🧪 Prueba Básica de Carga</h3>
+                    <p>Prueba de carga estándar que simula patrones de uso normal con incremento gradual de usuarios.
+                    </p>
+                    <div class="test-specs">
+                        <ul>
+                            <li><strong>Usuarios:</strong> 5-25 concurrentes</li>
+                            <li><strong>Duración:</strong> ~3.5 minutos</li>
+                            <li><strong>Escenarios:</strong> Auth, navegación, API</li>
+                            <li><strong>SLA:</strong> p95 < 500ms, Error rate < 5%</li>
+                        </ul>
+                    </div>
+                    <button class="run-button" onclick="runTest('basic')">Ejecutar Prueba Básica</button>
+                </div>
+
+                <div class="test-card">
+                    <h3>🔥 Prueba de Estrés</h3>
+                    <p>Encuentra los límites del sistema incrementando gradualmente la carga hasta encontrar el punto de
+                        ruptura.</p>
+                    <div class="test-specs">
+                        <ul>
+                            <li><strong>Usuarios:</strong> 1-50 concurrentes</li>
+                            <li><strong>Duración:</strong> ~8 minutos</li>
+                            <li><strong>Escenarios:</strong> Operaciones pesadas</li>
+                            <li><strong>SLA:</strong> p95 < 1000ms, Error rate < 10%</li>
+                        </ul>
+                    </div>
+                    <button class="run-button" onclick="runTest('stress')">Ejecutar Prueba de Estrés</button>
+                </div>
+
+                <div class="test-card">
+                    <h3>⚡ Prueba de Picos</h3>
+                    <p>Simula picos súbitos de tráfico para verificar la capacidad de respuesta ante cargas inesperadas.
+                    </p>
+                    <div class="test-specs">
+                        <ul>
+                            <li><strong>Usuarios:</strong> 100 concurrentes (pico)</li>
+                            <li><strong>Duración:</strong> ~1 minuto</li>
+                            <li><strong>Escenarios:</strong> Endpoints críticos</li>
+                            <li><strong>SLA:</strong> p95 < 2000ms, Error rate < 20%</li>
+                        </ul>
+                    </div>
+                    <button class="run-button" onclick="runTest('spike')">Ejecutar Prueba de Picos</button>
+                </div>
+
+                <div class="test-card">
+                    <h3>🔍 Prueba de API</h3>
+                    <p>Prueba sistemática de todos los endpoints principales de la API para verificar funcionalidad.</p>
+                    <div class="test-specs">
+                        <ul>
+                            <li><strong>Usuarios:</strong> 10 concurrentes</li>
+                            <li><strong>Duración:</strong> 1 minuto</li>
+                            <li><strong>Escenarios:</strong> Todos los endpoints</li>
+                            <li><strong>Coverage:</strong> Auth, Routes, Places, Content</li>
+                        </ul>
+                    </div>
+                    <button class="run-button" onclick="runTest('api')">Ejecutar Prueba de API</button>
+                </div>
+
+                <div class="test-card">
+                    <h3>⏱️ Prueba de Resistencia</h3>
+                    <p>Prueba de larga duración para verificar estabilidad y detectar memory leaks o degradación.</p>
+                    <div class="test-specs">
+                        <ul>
+                            <li><strong>Usuarios:</strong> 5 concurrentes constantes</li>
+                            <li><strong>Duración:</strong> 30 minutos</li>
+                            <li><strong>Escenarios:</strong> Sesiones largas</li>
+                            <li><strong>Objetivo:</strong> Estabilidad a largo plazo</li>
+                        </ul>
+                    </div>
+                    <button class="run-button" onclick="runTest('endurance')">Ejecutar Prueba de Resistencia</button>
+                </div>
+
+                <div class="test-card">
+                    <h3>📊 Todas las Pruebas</h3>
+                    <p>Ejecuta secuencialmente todas las pruebas (excepto resistencia) y genera reportes completos.</p>
+                    <div class="test-specs">
+                        <ul>
+                            <li><strong>Incluye:</strong> Básica, Estrés, Picos, API</li>
+                            <li><strong>Duración:</strong> ~15 minutos</li>
+                            <li><strong>Reportes:</strong> HTML + JSON</li>
+                            <li><strong>Ideal para:</strong> CI/CD y análisis completo</li>
+                        </ul>
+                    </div>
+                    <button class="run-button" onclick="runAllTests()">Ejecutar Todas las Pruebas</button>
+                </div>
+            </div>
+
+            <div class="commands-section">
+                <h2>📋 Comandos Rápidos</h2>
+
+                <div class="command-group">
+                    <h4>Comandos NPM:</h4>
+                    <div class="command">npm run perf:basic</div>
+                    <div class="command">npm run perf:stress</div>
+                    <div class="command">npm run perf:spike</div>
+                    <div class="command">npm run perf:api</div>
+                    <div class="command">npm run perf:endurance</div>
+                </div>
+
+                <div class="command-group">
+                    <h4>Comandos Artillery Directos:</h4>
+                    <div class="command">npx artillery run performance/basic-load-test.yml</div>
+                    <div class="command">npx artillery run performance/stress-test.yml --output report.json</div>
+                    <div class="command">npx artillery report report.json --output report.html</div>
+                </div>
+
+                <div class="command-group">
+                    <h4>Scripts de Automatización:</h4>
+                    <div class="command">./performance/run-tests.bat # Windows</div>
+                    <div class="command">./performance/run-tests.sh # Linux/Mac</div>
+                </div>
+            </div>
+
+            <div class="metrics-info">
+                <h3>📈 Métricas Importantes</h3>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <strong>p50, p95, p99:</strong><br>
+                        Percentiles de tiempo de respuesta
+                    </div>
+                    <div class="metric-item">
+                        <strong>RPS:</strong><br>
+                        Requests por segundo
+                    </div>
+                    <div class="metric-item">
+                        <strong>Error Rate:</strong><br>
+                        Porcentaje de requests fallidos
+                    </div>
+                    <div class="metric-item">
+                        <strong>Latencia:</strong><br>
+                        Tiempo de respuesta promedio
+                    </div>
+                    <div class="metric-item">
+                        <strong>Throughput:</strong><br>
+                        Capacidad de procesamiento
+                    </div>
+                    <div class="metric-item">
+                        <strong>Concurrent Users:</strong><br>
+                        Usuarios simultáneos soportados
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>💡 <strong>Tip:</strong> Asegúrate de que el servidor esté ejecutándose en <code>localhost:3000</code>
+                antes de ejecutar las pruebas.</p>
+            <p>Los reportes se generan automáticamente en <code>performance/reports/</code></p>
+        </div>
+    </div>
+
+    <script>
+        function runTest(testType) {
+            const commands = {
+                basic: 'npm run perf:basic',
+                stress: 'npm run perf:stress',
+                spike: 'npm run perf:spike',
+                api: 'npm run perf:api',
+                endurance: 'npm run perf:endurance'
+            };
+
+            const testNames = {
+                basic: 'Prueba Básica de Carga',
+                stress: 'Prueba de Estrés',
+                spike: 'Prueba de Picos',
+                api: 'Prueba de API',
+                endurance: 'Prueba de Resistencia'
+            };
+
+            alert(`Para ejecutar ${testNames[testType]}, usa el comando:\n\n${commands[testType]}\n\nO ejecuta directamente:\nnpx artillery run performance/${testType === 'basic' ? 'basic-load-test' : testType + '-test'}.yml`);
+        }
+
+        function runAllTests() {
+            alert(`Para ejecutar todas las pruebas, usa:\n\nWindows: .\\performance\\run-tests.bat\nLinux/Mac: ./performance/run-tests.sh\n\nO ejecuta cada prueba individualmente con los comandos npm.`);
+        }
+
+        // Verificar estado del servidor al cargar la página
+        window.addEventListener('load', function () {
+            fetch('http://localhost:3000/health')
+                .then(response => {
+                    if (response.ok) {
+                        console.log('✅ Servidor detectado en localhost:3000');
+                    }
+                })
+                .catch(error => {
+                    console.log('⚠️ Servidor no detectado en localhost:3000');
+                    const warningDiv = document.createElement('div');
+                    warningDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; border: 1px solid #f5c6cb; z-index: 1000; max-width: 300px;';
+                    warningDiv.innerHTML = '<strong>⚠️ Servidor no detectado</strong><br>Asegúrate de ejecutar <code>npm start</code> antes de las pruebas.';
+                    document.body.appendChild(warningDiv);
+
+                    setTimeout(() => {
+                        warningDiv.remove();
+                    }, 10000);
+                });
+        });
+    </script>
+</body>
+
+</html>

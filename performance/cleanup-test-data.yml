@@ -1,0 +1,30 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 30
+      arrivalRate: 1
+      name: "Cleanup"
+
+scenarios:
+  - name: "Cleanup Test Data"
+    weight: 100
+    flow:
+      # Login como admin o usuario con permisos
+      - post:
+          url: "/auth/login"
+          name: "Admin login for cleanup"
+          json:
+            email: "admin@nomada.com"
+            password: "adminpass123"
+          capture:
+            - json: "$.token"
+              as: "adminToken"
+      
+      # Aquí podrías agregar endpoints para limpiar datos de prueba
+      # Por ejemplo, eliminar usuarios de prueba, etc.
+      # Esto dependería de que tengas endpoints de administración
+      
+      # Por ahora, solo verificamos que el sistema esté funcionando
+      - get:
+          url: "/health"
+          name: "Health check after cleanup"

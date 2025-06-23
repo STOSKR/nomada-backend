@@ -1,0 +1,42 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Spike súbito de tráfico
+    - duration: 10
+      arrivalRate: 100
+      name: "Traffic Spike"
+    # Vuelta a la normalidad
+    - duration: 60
+      arrivalRate: 5
+      name: "Recovery"
+  
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+  
+  # Expectativas más relajadas para spikes
+  ensure:
+    p95: 2000
+    maxErrorRate: 20
+
+scenarios:
+  - name: "Spike Traffic Simulation"
+    weight: 100
+    flow:
+      # Endpoints más críticos durante picos de tráfico
+      - get:
+          url: "/health"
+          name: "Health check during spike"
+      
+      - get:
+          url: "/routes"
+          name: "Routes during spike"
+          qs:
+            limit: 10
+      
+      - post:
+          url: "/auth/login"
+          name: "Login during spike"
+          json:
+            email: "spike@test.com"
+            password: "testpassword"

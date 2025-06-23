@@ -1,0 +1,49 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Prueba rápida de 1 minuto
+    - duration: 20
+      arrivalRate: 5
+      name: "Quick Load Test"
+    - duration: 20
+      arrivalRate: 15
+      name: "Peak Load"
+    - duration: 20
+      arrivalRate: 2
+      name: "Cool Down"
+  
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+  
+  ensure:
+    p95: 500
+    maxErrorRate: 15
+
+scenarios:
+  - name: "Health Check"
+    weight: 50
+    flow:
+      - get:
+          url: "/health"
+          name: "Health Check"
+
+  - name: "Authentication Flow"
+    weight: 30
+    flow:
+      - post:
+          url: "/auth/login"
+          name: "Login Attempt"
+          json:
+            email: "test@example.com"
+            password: "testpassword123"
+
+  - name: "API Endpoints"
+    weight: 20
+    flow:
+      - get:
+          url: "/routes"
+          name: "Get Routes"
+      - get:
+          url: "/places"
+          name: "Get Places"

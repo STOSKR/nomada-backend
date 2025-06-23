@@ -1,0 +1,101 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "API Endpoint Testing"
+  
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+
+scenarios:
+  - name: "Auth API Testing"
+    weight: 25
+    flow:
+      # Signup
+      - post:
+          url: "/auth/signup"
+          name: "POST /auth/signup"
+          json:
+            email: "perftest{{$randomInt(1,1000)}}@example.com"
+            password: "testpassword123"
+            nomada_id: "perf{{$randomInt(1000,9999)}}"
+            username: "PerfUser{{$randomInt(1,100)}}"
+      
+      # Login
+      - post:
+          url: "/auth/login"
+          name: "POST /auth/login"
+          json:
+            email: "test@example.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      # Profile
+      - get:
+          url: "/users/profile"
+          name: "GET /users/profile"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  - name: "Routes API Testing"
+    weight: 25
+    flow:
+      # Get all routes
+      - get:
+          url: "/routes"
+          name: "GET /routes"
+          qs:
+            limit: 20
+            offset: 0
+      
+      # Get route by ID (assuming route exists)
+      - get:
+          url: "/routes/1"
+          name: "GET /routes/:id"
+
+  - name: "Places API Testing"
+    weight: 25
+    flow:
+      # Get places
+      - get:
+          url: "/places"
+          name: "GET /places"
+          qs:
+            limit: 15
+            search: "Madrid"
+      
+      # Get place by ID
+      - get:
+          url: "/places/1"
+          name: "GET /places/:id"
+
+  - name: "Content API Testing"
+    weight: 25
+    flow:
+      # Get recommendations
+      - get:
+          url: "/recommendations"
+          name: "GET /recommendations"
+          qs:
+            limit: 10
+      
+      # Get tags
+      - get:
+          url: "/tags"
+          name: "GET /tags"
+      
+      # Get moods
+      - get:
+          url: "/moods"
+          name: "GET /moods"
+      
+      # Newsletter signup
+      - post:
+          url: "/newsletter/subscribe"
+          name: "POST /newsletter/subscribe"
+          json:
+            email: "newsletter{{$randomInt(1,1000)}}@test.com"

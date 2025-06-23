@@ -1,0 +1,115 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Prueba de estrés gradual
+    - duration: 60
+      arrivalRate: 1
+      rampTo: 20
+      name: "Ramp up"
+    # Mantener carga alta
+    - duration: 300
+      arrivalRate: 20
+      name: "Sustained load"
+    # Pico de estrés
+    - duration: 60
+      arrivalRate: 50
+      name: "Stress peak"
+    # Descenso gradual
+    - duration: 60
+      arrivalRate: 50
+      rampTo: 1
+      name: "Ramp down"
+  
+  variables:
+    randomEmail: 'user{{$randomInt(1, 1000)}}@test.com'
+    randomNomadaId: 'nomada{{$randomInt(1000, 9999)}}'
+  
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+  
+  # Configuración más estricta para pruebas de estrés
+  ensure:
+    p95: 1000
+    p99: 2000
+    maxErrorRate: 10
+
+scenarios:
+  - name: "Mixed User Activity"
+    weight: 50
+    flow:
+      # Simular actividad real de usuario
+      - think: 1
+      
+      # Intentar login
+      - post:
+          url: "/auth/login"
+          name: "Login attempt"
+          json:
+            email: "{{ randomEmail }}"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "token"
+              default: "none"
+      
+      - think: 2
+      
+      # Navegar contenido público
+      - get:
+          url: "/routes"
+          name: "Browse routes"
+          qs:
+            limit: 20
+      
+      - think: 1
+      
+      - get:
+          url: "/places"
+          name: "Browse places"
+          qs:
+            limit: 15
+
+  - name: "Heavy Data Operations"
+    weight: 30
+    flow:
+      # Operaciones que requieren más recursos
+      - get:
+          url: "/routes"
+          name: "Large route query"
+          qs:
+            limit: 100
+            include_photos: true
+      
+      - think: 1
+      
+      - get:
+          url: "/recommendations"
+          name: "Get recommendations"
+          qs:
+            limit: 50
+
+  - name: "Authentication Stress"
+    weight: 20
+    flow:
+      # Múltiples intentos de autenticación
+      - loop:
+          - post:
+              url: "/auth/login"
+              name: "Multiple login attempts"
+              json:
+                email: "{{ randomEmail }}"
+                password: "wrongpassword"
+        count: 3
+      
+      - think: 1
+      
+      # Signup con datos aleatorios
+      - post:
+          url: "/auth/signup"
+          name: "Signup attempt"
+          json:
+            email: "{{ randomEmail }}"
+            password: "newpassword123"
+            nomada_id: "{{ randomNomadaId }}"
+            username: "User {{ $randomInt(1, 1000) }}"

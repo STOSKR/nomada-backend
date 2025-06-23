@@ -1,0 +1,93 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 30
+      arrivalRate: 2
+      name: "Setup Test Data"
+  
+  variables:
+    # Datos de prueba predefinidos
+    testUsers:
+      - email: "testuser1@nomada.com"
+        password: "testpass123"
+        nomada_id: "testuser1"
+        username: "Test User 1"
+      - email: "testuser2@nomada.com"
+        password: "testpass123"
+        nomada_id: "testuser2"
+        username: "Test User 2"
+      - email: "testuser3@nomada.com"
+        password: "testpass123"
+        nomada_id: "testuser3"
+        username: "Test User 3"
+
+scenarios:
+  - name: "Create Test Users"
+    weight: 50
+    flow:
+      # Crear usuarios de prueba
+      - post:
+          url: "/auth/signup"
+          name: "Create test user 1"
+          json:
+            email: "testuser1@nomada.com"
+            password: "testpass123"
+            nomada_id: "testuser1"
+            username: "Test User 1"
+            bio: "Usuario de prueba para performance testing"
+      
+      - post:
+          url: "/auth/signup"
+          name: "Create test user 2"
+          json:
+            email: "testuser2@nomada.com"
+            password: "testpass123"
+            nomada_id: "testuser2"
+            username: "Test User 2"
+            bio: "Usuario de prueba para performance testing"
+      
+      - post:
+          url: "/auth/signup"
+          name: "Create test user 3"
+          json:
+            email: "testuser3@nomada.com"
+            password: "testpass123"
+            nomada_id: "testuser3"
+            username: "Test User 3"
+            bio: "Usuario de prueba para performance testing"
+
+  - name: "Setup Newsletter Subscribers"
+    weight: 30
+    flow:
+      # Crear suscriptores de newsletter de prueba
+      - post:
+          url: "/newsletter/subscribe"
+          name: "Newsletter subscriber 1"
+          json:
+            email: "newsletter1@test.com"
+      
+      - post:
+          url: "/newsletter/subscribe"
+          name: "Newsletter subscriber 2"
+          json:
+            email: "newsletter2@test.com"
+
+  - name: "Verify Setup"
+    weight: 20
+    flow:
+      # Verificar que los datos se crearon correctamente
+      - post:
+          url: "/auth/login"
+          name: "Verify test user login"
+          json:
+            email: "testuser1@nomada.com"
+            password: "testpass123"
+          capture:
+            - json: "$.token"
+              as: "verifyToken"
+      
+      - get:
+          url: "/users/profile"
+          name: "Verify user profile"
+          headers:
+            Authorization: "Bearer {{ verifyToken }}"
