@@ -3,6 +3,7 @@ services:
     name: nomada-backend
     env: node
     plan: free
+    runtime: node
     buildCommand: npm install --legacy-peer-deps --force
     startCommand: npm start
     envVars:
@@ -12,6 +13,8 @@ services:
         value: true
       - key: NPM_CONFIG_FORCE
         value: true
+      - key: NODE_VERSION
+        value: 22.13.0
     healthCheckPath: /health
     scaling:
       minInstances: 1
