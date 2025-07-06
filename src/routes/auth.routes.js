@@ -377,11 +377,15 @@ async function authRoutes(fastify, options) {
                 .from('users')
                 .select('*')
                 .eq('id', supabaseUID) // Usar el UID como ID principal
-                .single(); console.log('Resultado de búsqueda:', { existingUser, findError });
+                .single();
 
-            let user;            // Verificar si el usuario existe (error PGRST116 significa "no encontrado")
+            console.log('Resultado de búsqueda por ID:', { existingUser, findError });
+
+            let user;
+
+            // Verificar si el usuario existe (error PGRST116 significa "no encontrado")
             if (existingUser && !findError) {
-                console.log('Usuario existente encontrado:', existingUser);
+                console.log('Usuario existente encontrado por ID:', existingUser);
 
                 // Preparar objeto de actualización solo para campos vacíos/nulos
                 const updateData = {
@@ -416,35 +420,83 @@ async function authRoutes(fastify, options) {
 
                 user = updatedUser;
             } else {
-                console.log('Creando nuevo usuario...');
-                // Crear nuevo usuario con datos de Google usando el UID de Supabase
-                const nomadaId = await authService.generateUniqueNomadaId(googleUser.user_metadata?.full_name || 'nomada');
-
-                console.log('Nomada ID generado:', nomadaId); const { data: newUser, error: createError } = await fastify.supabase
+                // Si no se encuentra por ID, buscar por email (puede existir de registro previo)
+                console.log('No encontrado por ID, buscando por email...');
+                const { data: existingUserByEmail, error: findByEmailError } = await fastify.supabase
                     .from('users')
-                    .insert([{
-                        id: supabaseUID, // Usar el UID de Supabase como ID
-                        email: googleUser.email,
-                        username: googleUser.user_metadata?.full_name || 'Usuario Google',
-                        nomada_id: nomadaId,
-                        bio: null,
-                        avatar_url: googleUser.user_metadata?.avatar_url,
-                        preferences: {},
-                        visited_countries: [],
-                        followers_count: 0,
-                        following_count: 0,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    }])
-                    .select()
+                    .select('*')
+                    .eq('email', googleUser.email)
                     .single();
 
-                if (createError) {
-                    console.error('Error creando usuario:', createError);
-                    throw new Error('Error creando usuario: ' + createError.message);
-                }
+                console.log('Resultado de búsqueda por email:', { existingUserByEmail, findByEmailError });
 
-                user = newUser;
+                if (existingUserByEmail && !findByEmailError) {
+                    console.log('Usuario existente encontrado por email, actualizando ID...');
+
+                    // Usuario existe con email pero diferente ID - actualizar el ID y otros datos
+                    const updateData = {
+                        id: supabaseUID, // Actualizar con el nuevo UID de Supabase
+                        updated_at: new Date().toISOString()
+                    };
+
+                    // Actualizar otros campos si están vacíos
+                    if ((!existingUserByEmail.username || existingUserByEmail.username.trim() === '') &&
+                        googleUser.user_metadata?.full_name) {
+                        updateData.username = googleUser.user_metadata.full_name;
+                    }
+
+                    if ((!existingUserByEmail.avatar_url || existingUserByEmail.avatar_url.trim() === '') &&
+                        googleUser.user_metadata?.avatar_url) {
+                        updateData.avatar_url = googleUser.user_metadata.avatar_url;
+                    }
+
+                    console.log('Actualizando usuario existente con nuevo UID:', updateData);
+
+                    const { data: updatedUser, error: updateError } = await fastify.supabase
+                        .from('users')
+                        .update(updateData)
+                        .eq('email', googleUser.email) // Usar email como referencia
+                        .select()
+                        .single();
+
+                    if (updateError) {
+                        throw new Error('Error actualizando usuario existente: ' + updateError.message);
+                    }
+
+                    user = updatedUser;
+                } else {
+                    console.log('Creando nuevo usuario...');
+                    // Crear nuevo usuario con datos de Google usando el UID de Supabase
+                    const nomadaId = await authService.generateUniqueNomadaId(googleUser.user_metadata?.full_name || 'nomada');
+
+                    console.log('Nomada ID generado:', nomadaId);
+
+                    const { data: newUser, error: createError } = await fastify.supabase
+                        .from('users')
+                        .insert([{
+                            id: supabaseUID, // Usar el UID de Supabase como ID
+                            email: googleUser.email,
+                            username: googleUser.user_metadata?.full_name || 'Usuario Google',
+                            nomada_id: nomadaId,
+                            bio: null,
+                            avatar_url: googleUser.user_metadata?.avatar_url,
+                            preferences: {},
+                            visited_countries: [],
+                            followers_count: 0,
+                            following_count: 0,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        }])
+                        .select()
+                        .single();
+
+                    if (createError) {
+                        console.error('Error creando usuario:', createError);
+                        throw new Error('Error creando usuario: ' + createError.message);
+                    }
+
+                    user = newUser;
+                }
             } console.log('Usuario final:', user);
 
             // 4. Generar JWT token propio del backend
