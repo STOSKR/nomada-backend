@@ -427,7 +427,7 @@ async function authRoutes(fastify, options) {
                         email: googleUser.email,
                         username: googleUser.user_metadata?.full_name || 'Usuario Google',
                         nomada_id: nomadaId,
-                        bio: 'Soy el primer usuario',
+                        bio: null,
                         avatar_url: googleUser.user_metadata?.avatar_url,
                         preferences: {},
                         visited_countries: [],
