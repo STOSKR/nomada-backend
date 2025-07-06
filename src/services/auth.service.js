@@ -14,11 +14,46 @@ class AuthService {
     }
 
     /**
+     * Genera un nomada_id único basado en el nombre del usuario
+     * @param {string} name - Nombre del usuario (username o full_name)
+     * @returns {Promise<string>} - nomada_id único generado
+     */
+    async generateUniqueNomadaId(name) {
+        let baseId = (name || 'nomada')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '')
+            .substring(0, 10);
+
+        if (!baseId) baseId = 'nomada';
+
+        let counter = 1;
+        let nomadaId = baseId;
+
+        while (true) {
+            const { data, error } = await this.supabase
+                .from('users')
+                .select('id')
+                .eq('nomada_id', nomadaId)
+                .single();
+
+            if (error && error.code === 'PGRST116') {
+                // No existe, podemos usar este ID
+                break;
+            }
+
+            nomadaId = `${baseId}${counter}`;
+            counter++;
+        }
+
+        return nomadaId;
+    }
+
+    /**
      * Registrar un nuevo usuario
      * @param {Object} userData - Datos del usuario a registrar
      * @returns {Promise<Object>} - Usuario registrado y token de sesión
      */    async signup(userData) {
-        const { email, password, nomada_id, username, bio, avatar_url } = userData;
+        const { email, password, username, bio, avatar_url } = userData;
 
         // Verificar si el email ya está registrado
         const { data: existingEmail } = await this.supabase
@@ -31,16 +66,8 @@ class AuthService {
             throw new Error('El email ya está registrado');
         }
 
-        // Verificar si el nomada_id ya está en uso
-        const { data: existingNomadaId } = await this.supabase
-            .from('users')
-            .select('id')
-            .eq('nomada_id', nomada_id)
-            .maybeSingle();
-
-        if (existingNomadaId) {
-            throw new Error('El identificador de nómada ya está en uso');
-        }        // Registrar usuario en Supabase Auth
+        // Generar nomada_id único automáticamente
+        const nomada_id = await this.generateUniqueNomadaId(username || email.split('@')[0]);        // Registrar usuario en Supabase Auth
         const { data: authData, error: authError } = await this.supabase.auth.signUp({
             email,
             password,
@@ -206,6 +233,39 @@ class AuthService {
             user: data.user
         };
     }
+
+    /**
+     * Verificar si un email está disponible para registro
+     * @param {string} email - Email a verificar
+     * @returns {Promise<Object>} - Resultado de la verificación (falla si ya está registrado)
+     */
+    async checkEmailAvailable(email) {
+        try {
+            const { data: existingUser, error } = await this.supabase
+                .from('users')
+                .select('id, email')
+                .eq('email', email.toLowerCase().trim())
+                .maybeSingle();
+
+            if (error && error.code !== 'PGRST116') {
+                throw new Error(`Error al verificar email: ${error.message}`);
+            }
+
+            // Si el usuario existe, lanzar error
+            if (existingUser) {
+                throw new Error('El email ya está registrado');
+            }
+
+            // Si llegamos aquí, el email está disponible
+            return {
+                available: true,
+                email: email.toLowerCase().trim()
+            };
+        } catch (error) {
+            console.error('Error verificando disponibilidad de email:', error);
+            throw error; // Re-lanzar el error para que la ruta lo maneje
+        }
+    }
 }
 
-module.exports = AuthService; 
+module.exports = AuthService;   

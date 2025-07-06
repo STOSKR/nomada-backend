@@ -17,13 +17,12 @@ const schemas = {
         tags: ['autenticación'],
         consumes: ['application/json'], body: {
             type: 'object',
-            required: ['email', 'password', 'nomada_id'],
+            required: ['email', 'password'],
             additionalProperties: true,
             properties: {
                 email: { type: 'string', format: 'email', description: 'Correo electrónico (requerido)' },
                 password: { type: 'string', minLength: 8, description: 'Contraseña (requerido, mínimo 8 caracteres)' },
-                nomada_id: { type: 'string', minLength: 3, description: 'Identificador único de usuario (requerido, mínimo 3 caracteres)' },
-                username: { type: 'string', description: 'Nombre visible del usuario' },
+                username: { type: 'string', description: 'Nombre visible del usuario (opcional, se usará para generar nomada_id)' },
                 bio: { type: 'string', description: 'Biografía del usuario' },
                 avatar_url: { type: 'string', description: 'URL del avatar del usuario' }
             }
@@ -219,7 +218,39 @@ const schemas = {
                 }
             }
         }
-    }
+    },
+
+    checkEmail: {
+        description: 'Verificar si un email está disponible para registro',
+        tags: ['autenticación'],
+        body: {
+            type: 'object',
+            required: ['email'],
+            properties: {
+                email: { type: 'string', format: 'email', description: 'Correo electrónico a verificar' }
+            }
+        },
+        response: {
+            200: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    available: { type: 'boolean', description: 'true si el email está disponible' },
+                    email: { type: 'string', description: 'Email verificado (normalizado)' },
+                    message: { type: 'string', description: 'Confirmación de disponibilidad' }
+                }
+            },
+            400: {
+                type: 'object',
+                properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string', description: 'Error - email ya registrado o inválido' }
+                }
+            }
+        }
+    },
+
+    // ...existing code...
 };
 
 /**
@@ -387,7 +418,7 @@ async function authRoutes(fastify, options) {
             } else {
                 console.log('Creando nuevo usuario...');
                 // Crear nuevo usuario con datos de Google usando el UID de Supabase
-                const nomadaId = await generateUniqueNomadaId(fastify.supabase, googleUser.user_metadata?.full_name || 'nomada');
+                const nomadaId = await authService.generateUniqueNomadaId(googleUser.user_metadata?.full_name || 'nomada');
 
                 console.log('Nomada ID generado:', nomadaId); const { data: newUser, error: createError } = await fastify.supabase
                     .from('users')
@@ -399,7 +430,7 @@ async function authRoutes(fastify, options) {
                         bio: 'Soy el primer usuario',
                         avatar_url: googleUser.user_metadata?.avatar_url,
                         preferences: {},
-                        visited_countries: '{}::text[]',
+                        visited_countries: [],
                         followers_count: 0,
                         following_count: 0,
                         created_at: new Date().toISOString(),
@@ -477,26 +508,56 @@ async function authRoutes(fastify, options) {
         }
     });
 
+    // Ruta para verificar disponibilidad de email
+    fastify.post('/check-email', { schema: schemas.checkEmail }, async (request, reply) => {
+        try {
+            const { email } = request.body;
+
+            if (!email || !email.trim()) {
+                return reply.code(400).send({
+                    success: false,
+                    message: 'Email es requerido'
+                });
+            }
+
+            // Usar el nuevo método que falla si el email ya está registrado
+            const result = await authService.checkEmailAvailable(email);
+
+            return reply.code(200).send({
+                success: true,
+                available: result.available,
+                email: result.email,
+                message: 'El email está disponible para registro'
+            });
+
+        } catch (error) {
+            request.log.error(error);
+            return reply.code(400).send({
+                success: false,
+                message: error.message // "El email ya está registrado" si existe
+            });
+        }
+    });
+
     // RUTA TEMPORAL: Registro simplificado sin validación de esquema para solucionar el error "body must be object"
     fastify.post('/register-simple', {}, async (request, reply) => {
         try {
             console.log('Headers:', request.headers);
             console.log('Cuerpo recibido:', request.body);            // Extraer los datos necesarios
-            const { email, password, nomada_id, username, bio, avatar_url } = request.body;
+            const { email, password, username, bio, avatar_url } = request.body;
 
             // Validación manual básica
-            if (!email || !password || !nomada_id) {
+            if (!email || !password) {
                 return reply.code(400).send({
                     success: false,
-                    message: 'Los campos email, password y nomada_id son obligatorios'
+                    message: 'Los campos email y password son obligatorios'
                 });
             }
 
-            // Procesar el registro con avatar si se proporciona
+            // Procesar el registro con generación automática de nomada_id
             const result = await authService.signup({
                 email,
                 password,
-                nomada_id,
                 username: username || null,
                 bio: bio || null,
                 avatar_url: avatar_url || null
@@ -523,37 +584,6 @@ async function authRoutes(fastify, options) {
             });
         }
     });
-}
-
-// Función auxiliar para generar nomada_id único
-async function generateUniqueNomadaId(supabase, name) {
-    let baseId = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
-        .substring(0, 10);
-
-    if (!baseId) baseId = 'nomada';
-
-    let counter = 1;
-    let nomadaId = baseId;
-
-    while (true) {
-        const { data, error } = await supabase
-            .from('users')
-            .select('id')
-            .eq('nomada_id', nomadaId)
-            .single();
-
-        if (error && error.code === 'PGRST116') {
-            // No existe, podemos usar este ID
-            break;
-        }
-
-        nomadaId = `${baseId}${counter}`;
-        counter++;
-    }
-
-    return nomadaId;
 }
 
 module.exports = authRoutes;
