@@ -1,30 +1,22 @@
-// Importar fastify y plugins
 const fastify = require('fastify');
 const cors = require('@fastify/cors');
-const { supabasePlugin } = require('./db/supabase'); // Importar el plugin de Supabase
-
-// Implementación para entornos serverless (como Vercel)
+const { supabasePlugin } = require('./db/supabase');
 const isVercelProd = process.env.VERCEL === '1';
 
-// Setup para multer y manejo de archivos
 const path = require('path');
 const multer = require('multer');
 
-// Configuración de almacenamiento para diferentes entornos
 let storage;
 let uploadsDir;
 
-// En entorno Vercel usamos almacenamiento en memoria
 if (isVercelProd) {
-  // En Vercel, usar almacenamiento en memoria
+  
   storage = multer.memoryStorage();
-  uploadsDir = '/tmp'; // directorio temporal, pero no lo usaremos realmente
+  uploadsDir = '/tmp';
 } else {
-  // En desarrollo local, usar almacenamiento en disco
   const fs = require('fs');
   uploadsDir = path.join(__dirname, '../uploads');
 
-  // Asegurar que el directorio de uploads existe
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
@@ -39,22 +31,18 @@ if (isVercelProd) {
   });
 }
 
-// Crear instancia de multer
 const upload = multer({ storage: storage });
 
-// Utilidad para manejar multer en fastify
 const multerHandler = (fieldName) => (request, reply, done) => {
   upload.single(fieldName)(request.raw, reply.raw, (err) => {
     if (err) {
       return done(err);
     }
 
-    // Transferir archivos y campos a request
     if (request.raw.file) {
       request.file = request.raw.file;
     }
 
-    // Asegurarse de que request.body incluye todos los campos
     if (request.raw.body) {
       Object.assign(request.body, request.raw.body);
     }
@@ -63,10 +51,9 @@ const multerHandler = (fieldName) => (request, reply, done) => {
   });
 };
 
-// Crear la instancia de Fastify con las opciones
 const app = fastify({
   logger: true,
-  bodyLimit: 100 * 1024 * 1024, // Aumentado a 100MB
+  bodyLimit: 100 * 1024 * 1024,
   ajv: {
     customOptions: {
       removeAdditional: false,
@@ -75,10 +62,8 @@ const app = fastify({
   }
 });
 
-// Registrar el plugin de Supabase
 app.register(supabasePlugin);
 
-// Registrar CORS para permitir solicitudes desde el frontend
 app.register(cors, {
   origin: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -88,7 +73,7 @@ app.register(cors, {
 
 // JWT para autenticación
 app.register(require('@fastify/jwt'), {
-  secret: process.env.JWT_SECRET || 'un_secreto_muy_seguro',
+  secret: process.env.JWT_SECRET || 'token',
   sign: {
     expiresIn: '24h'
   }
